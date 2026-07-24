@@ -22,10 +22,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Brand */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-sm flex items-center justify-center font-bold text-white text-xs">
-            SI
+            HX
           </div>
           <h1 className="text-lg font-semibold tracking-tight text-slate-200">
-            Story Intelligence <span className="text-slate-500 font-normal hidden sm:inline">/ Project Phoenix</span>
+            Helix <span className="text-slate-500 font-normal">/ Story Intelligence</span>
           </h1>
         </div>
 

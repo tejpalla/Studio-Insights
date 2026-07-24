@@ -15,6 +15,7 @@ import { Sparkles, AlertCircle, FileText, BarChart3, Radio } from 'lucide-react'
 
 export default function App() {
   const [currentScript, setCurrentScript] = useState<StoryScript>(SAMPLE_SCRIPTS[0]);
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash-lite');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'analytics' | 'script-editor' | 'sandbox'>('script-editor');
@@ -26,10 +27,10 @@ export default function App() {
 
   // Auto-analyze initial script on first load so user immediately sees rich data!
   useEffect(() => {
-    handleAnalyzeScript(SAMPLE_SCRIPTS[0]);
+    handleAnalyzeScript(SAMPLE_SCRIPTS[0], selectedModel);
   }, []);
 
-  const handleAnalyzeScript = async (scriptToAnalyze: StoryScript) => {
+  const handleAnalyzeScript = async (scriptToAnalyze: StoryScript, modelToUse: string = selectedModel) => {
     setIsAnalyzing(true);
     setErrorMsg(null);
 
@@ -43,6 +44,7 @@ export default function App() {
           genre: scriptToAnalyze.genre,
           targetAudience: scriptToAnalyze.targetAudience,
           episodes: scriptToAnalyze.episodes,
+          model: modelToUse,
         }),
       });
 
@@ -140,8 +142,10 @@ export default function App() {
             <ScriptEditorPanel
               currentScript={currentScript}
               setCurrentScript={setCurrentScript}
-              onAnalyze={handleAnalyzeScript}
+              onAnalyze={(script) => handleAnalyzeScript(script, selectedModel)}
               isAnalyzing={isAnalyzing}
+              selectedModel={selectedModel}
+              setSelectedModel={setSelectedModel}
             />
           )}
 

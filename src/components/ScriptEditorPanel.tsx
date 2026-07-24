@@ -6,8 +6,10 @@ import { Play, Sparkles, Plus, Trash2, BookOpen, Layers, Clock, AlertCircle, Upl
 interface ScriptEditorPanelProps {
   currentScript: StoryScript;
   setCurrentScript: (script: StoryScript) => void;
-  onAnalyze: (script: StoryScript) => void;
+  onAnalyze: (script: StoryScript, model?: string) => void;
   isAnalyzing: boolean;
+  selectedModel: string;
+  setSelectedModel: (model: string) => void;
 }
 
 export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
@@ -15,6 +17,8 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   setCurrentScript,
   onAnalyze,
   isAnalyzing,
+  selectedModel,
+  setSelectedModel,
 }) => {
   const [selectedSampleId, setSelectedSampleId] = useState<string>(SAMPLE_SCRIPTS[0].id);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -27,17 +31,48 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
     reader.onload = (e) => {
       const text = e.target?.result as string;
       if (text) {
-        setCurrentScript({
-          ...currentScript,
-          title: file.name.replace(/\.[^/.]+$/, ""),
-          episodes: [
+        let rawTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        rawTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+
+        const episodeRegex = /(?:^|\n)(?:#{1,3}\s*)?(?:Episode|Ep\.?)\s*(\d+)(?:\s*[:\-]?\s*(.*))?/gi;
+        
+        let episodes: StoryEpisode[] = [];
+        let matches = [...text.matchAll(episodeRegex)];
+
+        if (matches.length > 0) {
+          for (let i = 0; i < matches.length; i++) {
+            const currentMatch = matches[i];
+            const epNum = parseInt(currentMatch[1], 10) || (i + 1);
+            const epTitleHeading = currentMatch[2]?.trim() || `Episode ${epNum}`;
+            
+            const startIndex = currentMatch.index! + currentMatch[0].length;
+            const endIndex = (i + 1 < matches.length) ? matches[i + 1].index! : text.length;
+            const scriptText = text.substring(startIndex, endIndex).trim();
+
+            episodes.push({
+              id: `ep-${Date.now()}-${i}`,
+              episodeNumber: epNum,
+              title: epTitleHeading,
+              scriptText: scriptText || currentMatch[0]
+            });
+          }
+        }
+
+        if (episodes.length === 0) {
+          episodes = [
             {
-              id: `ep-${Date.now()}`,
+              id: `ep-${Date.now()}-1`,
               episodeNumber: 1,
               title: 'Uploaded Script',
-              scriptText: text
+              scriptText: text.trim()
             }
-          ]
+          ];
+        }
+
+        setCurrentScript({
+          ...currentScript,
+          title: rawTitle,
+          episodes
         });
         setSelectedSampleId('');
       }
@@ -147,51 +182,59 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
           </div>
         </div>
 
-        {/* Preset Sample Cards */}
-        <div className="space-y-2 relative">
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
-            Load Pocket FM Benchmark Sample Stories
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {SAMPLE_SCRIPTS.map((sample) => {
-              const isSelected = selectedSampleId === sample.id;
-              return (
-                <button
-                  key={sample.id}
-                  onClick={() => handleSelectSample(sample)}
-                  className={`text-left p-3.5 rounded border transition-all relative ${
-                    isSelected
-                      ? 'bg-[#0F1014] border-indigo-500 text-white'
-                      : 'bg-[#0A0A0C] border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-[#0F1014]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest truncate max-w-[180px]">
-                      {sample.genre}
-                    </span>
-                    {isSelected && (
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
-                    )}
-                  </div>
-                  <h4 className="text-sm font-semibold truncate text-white tracking-tight">{sample.title}</h4>
-                  <p className="text-[10px] text-slate-400 mt-1 flex items-center space-x-2">
-                    <Layers className="w-3 h-3 text-slate-500" />
-                    <span>{sample.episodes.length} Episodes</span>
-                    <span>•</span>
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    <span>
-                      {(
-                        sample.episodes.reduce(
-                          (acc, ep) => acc + ep.scriptText.split(/\s+/).length,
-                          0
-                        ) / 140
-                      ).toFixed(1)}{' '}
-                      m
-                    </span>
-                  </p>
-                </button>
-              );
-            })}
+        {/* Model Selector & Preset Sample Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="md:col-span-1 space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
+              AI Model Engine
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="w-full bg-[#0F1014] border border-slate-800 rounded p-2.5 text-xs text-white font-medium focus:outline-none focus:border-indigo-500"
+            >
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
+              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gpt-4o">OpenAI GPT-4o</option>
+              <option value="gpt-4o-mini">OpenAI GPT-4o-mini</option>
+            </select>
+          </div>
+          <div className="md:col-span-3 space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
+              Load Pocket FM Benchmark Sample Stories
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {SAMPLE_SCRIPTS.map((sample) => {
+                const isSelected = selectedSampleId === sample.id;
+                return (
+                  <button
+                    key={sample.id}
+                    onClick={() => handleSelectSample(sample)}
+                    className={`text-left p-3 rounded border transition-all relative ${
+                      isSelected
+                        ? 'bg-[#0F1014] border-indigo-500 text-white'
+                        : 'bg-[#0A0A0C] border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-[#0F1014]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest truncate max-w-[120px]">
+                        {sample.genre}
+                      </span>
+                      {isSelected && (
+                        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+                      )}
+                    </div>
+                    <h4 className="text-xs font-semibold truncate text-white tracking-tight">{sample.title}</h4>
+                    <p className="text-[9px] text-slate-400 mt-0.5 flex items-center space-x-1">
+                      <Layers className="w-2.5 h-2.5 text-slate-500" />
+                      <span>{sample.episodes.length} Eps</span>
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
