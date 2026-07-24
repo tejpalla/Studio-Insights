@@ -1,0 +1,6 @@
+{
+  "name": "Story Intelligence Platform",
+  "description": "AI-powered pre-publication story analytics and listener retention optimization for audio dramas.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
