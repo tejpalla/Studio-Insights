@@ -48,7 +48,9 @@ app.post('/api/analyze-story', async (req, res) => {
       return res.status(400).json({ error: 'At least one episode script is required.' });
     }
 
-    const ai = getGeminiClient();
+    const hasGemini = Boolean(process.env.GEMINI_API_KEY);
+    const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
+    const ai = hasGemini ? getGeminiClient() : null;
 
     const fullScriptCombined = episodes
       .map(
@@ -254,7 +256,7 @@ Return JSON strictly adhering to the specified schema:
       },
     };
 
-    const requestedModel = req.body.model || 'gemini-2.5-flash';
+    const requestedModel = req.body.model || 'gpt-4o-mini';
     let result: any = null;
     let lastError: any = null;
 
@@ -280,11 +282,35 @@ Return JSON strictly adhering to the specified schema:
       }
     }
 
-    if (!result || !result.text) {
+    // Prefer OpenAI when available and Gemini key is missing (or after Gemini path fails)
+    if ((!result || !result.text) && hasOpenAI && (!hasGemini || requestedModel.startsWith('gpt-') || requestedModel.startsWith('o1-') || requestedModel.startsWith('o3-'))) {
+      try {
+        const openai = getOpenAIClient();
+        const openaiModel = requestedModel.startsWith('gpt-') || requestedModel.startsWith('o1-') || requestedModel.startsWith('o3-')
+          ? requestedModel
+          : 'gpt-4o-mini';
+        const completion = await openai.chat.completions.create({
+          model: openaiModel,
+          messages: [
+            { role: 'system', content: 'You are Pocket FM\'s Chief Story Intelligence & Listener Retention AI Specialist. Return valid JSON matching the requested schema.' },
+            { role: 'user', content: prompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.2
+        });
+        const contentText = completion.choices[0]?.message?.content;
+        if (contentText) {
+          result = { text: contentText };
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn('OpenAI analyze failed:', err?.message || err);
+      }
+    }
+
+    if ((!result || !result.text) && hasGemini && ai) {
       const candidateModels = [
-        requestedModel.startsWith('gpt-') ? 'gemini-3.5-flash-lite' : requestedModel,
-        'gemini-3.5-flash-lite',
-        'gemini-3.5-flash',
+        requestedModel.startsWith('gpt-') ? 'gemini-2.5-flash' : requestedModel,
         'gemini-2.5-flash',
         'gemini-2.5-pro'
       ];
@@ -310,8 +336,8 @@ Return JSON strictly adhering to the specified schema:
       }
     }
 
-    // If Gemini still failed and OpenAI key exists, try OpenAI as ultimate fallback
-    if ((!result || !result.text) && process.env.OPENAI_API_KEY) {
+    // Final OpenAI fallback if Gemini path exhausted
+    if ((!result || !result.text) && hasOpenAI) {
       try {
         const openai = getOpenAIClient();
         const completion = await openai.chat.completions.create({
@@ -328,6 +354,7 @@ Return JSON strictly adhering to the specified schema:
           result = { text: contentText };
         }
       } catch (err: any) {
+        lastError = err;
         console.warn('OpenAI fallback failed:', err?.message || err);
       }
     }
@@ -450,7 +477,6 @@ Return JSON strictly adhering to the specified schema:
 app.post('/api/rewrite-scene', async (req, res) => {
   try {
     const { scriptSnippet, issueDescription, instruction } = req.body;
-    const ai = getGeminiClient();
 
     const prompt = `You are a world-class audio drama script doctor for serial platforms like Pocket FM.
 Rewrite the following audio script snippet to maximize listener retention, emotional tension, dialogue punchiness, and SFX atmosphere.
@@ -472,8 +498,28 @@ Return JSON strictly adhering to schema:
 - estimatedRetentionGain: string (e.g. "+14% retention at 01:15")
 `;
 
+    if (process.env.OPENAI_API_KEY) {
+      const openai = getOpenAIClient();
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a world-class audio drama script doctor. Return valid JSON only.' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.4
+      });
+      const contentText = completion.choices[0]?.message?.content || '{}';
+      return res.json(JSON.parse(contentText));
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'No OPENAI_API_KEY or GEMINI_API_KEY configured.' });
+    }
+
+    const ai = getGeminiClient();
     const result = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -501,6 +547,10 @@ app.post('/api/tts-preview', async (req, res) => {
     const { text, voiceName = 'Kore' } = req.body;
     if (!text || text.trim().length === 0) {
       return res.status(400).json({ error: 'Text prompt required for TTS.' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(501).json({ error: 'TTS requires GEMINI_API_KEY. Analysis/rewrite work with OPENAI_API_KEY alone.' });
     }
 
     const ai = getGeminiClient();
@@ -556,7 +606,8 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Story Intelligence Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Story Intelligence Server listening on http://localhost:${PORT}`);
+    console.log(`AI: OpenAI=${Boolean(process.env.OPENAI_API_KEY) ? 'yes' : 'no'}, Gemini=${Boolean(process.env.GEMINI_API_KEY) ? 'yes' : 'no'}`);
   });
 }
 

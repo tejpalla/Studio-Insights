@@ -204,12 +204,10 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               onChange={(e) => setSelectedModel(e.target.value)}
               className="w-full bg-[#0F1014] border border-slate-800 rounded p-2.5 text-xs text-white font-medium focus:outline-none focus:border-crimson-500"
             >
-              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
-              <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+              <option value="gpt-4o-mini">OpenAI GPT-4o-mini</option>
+              <option value="gpt-4o">OpenAI GPT-4o</option>
               <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
               <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-              <option value="gpt-4o">OpenAI GPT-4o</option>
-              <option value="gpt-4o-mini">OpenAI GPT-4o-mini</option>
             </select>
           </div>
           <div className="md:col-span-3 space-y-1.5">
