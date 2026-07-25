@@ -15,6 +15,8 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
         return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
       case 'B Tier':
         return 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+      case 'C Tier':
+        return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
       default:
         return 'bg-rose-500/20 text-rose-300 border-rose-500/40';
     }
