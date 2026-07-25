@@ -8,14 +8,14 @@ interface StoryGenomeCardProps {
 
 export const StoryGenomeCard: React.FC<StoryGenomeCardProps> = ({ genome }) => {
   const metrics = [
-    { label: 'Emotional Intensity', value: genome?.emotionalIntensity || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Pacing Velocity', value: genome?.pacingVelocity || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Dialogue Density', value: genome?.dialogueDensity || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Suspense Index', value: genome?.suspenseIndex || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Romance Index', value: genome?.romanceIndex || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Action Scale', value: genome?.actionScale || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Humor Rating', value: genome?.humorRating || 0, color: 'from-indigo-600 to-indigo-400' },
-    { label: 'Hook Strength', value: genome?.hookStrength || 0, color: 'from-indigo-600 to-indigo-400' },
+    { label: 'Emotional Intensity', value: genome?.emotionalIntensity || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Pacing Velocity', value: genome?.pacingVelocity || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Dialogue Density', value: genome?.dialogueDensity || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Suspense Index', value: genome?.suspenseIndex || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Romance Index', value: genome?.romanceIndex || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Action Scale', value: genome?.actionScale || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Humor Rating', value: genome?.humorRating || 0, color: 'from-crimson-600 to-crimson-400' },
+    { label: 'Hook Strength', value: genome?.hookStrength || 0, color: 'from-crimson-600 to-crimson-400' },
   ];
 
   return (
@@ -23,7 +23,7 @@ export const StoryGenomeCard: React.FC<StoryGenomeCardProps> = ({ genome }) => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-indigo-900/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded bg-crimson-900/20 border border-crimson-500/30 flex items-center justify-center text-crimson-400">
             <Dna className="w-4 h-4" />
           </div>
           <div>
@@ -32,7 +32,7 @@ export const StoryGenomeCard: React.FC<StoryGenomeCardProps> = ({ genome }) => {
           </div>
         </div>
 
-        <div className="bg-[#0F1014] px-3 py-1.5 rounded border border-slate-800 text-xs text-indigo-300 font-semibold flex items-center space-x-2">
+        <div className="bg-[#0F1014] px-3 py-1.5 rounded border border-slate-800 text-xs text-crimson-300 font-semibold flex items-center space-x-2">
           <Compass className="w-3.5 h-3.5" />
           <span>Archetype: {genome?.archetype || 'Unknown'}</span>
         </div>
@@ -42,7 +42,7 @@ export const StoryGenomeCard: React.FC<StoryGenomeCardProps> = ({ genome }) => {
       <div className="space-y-3">
         <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
           <span>Genre Blend DNA</span>
-          <span className="text-indigo-400">{genome?.primaryGenre || 'N/A'}</span>
+          <span className="text-crimson-400">{genome?.primaryGenre || 'N/A'}</span>
         </div>
 
         <div className="space-y-2 bg-[#0F1014] p-4 rounded border border-slate-800">
@@ -50,11 +50,11 @@ export const StoryGenomeCard: React.FC<StoryGenomeCardProps> = ({ genome }) => {
             <div key={idx} className="space-y-1">
               <div className="flex justify-between text-xs text-slate-300">
                 <span className="font-medium">{item.name}</span>
-                <span className="font-mono text-indigo-400">{item.percentage}%</span>
+                <span className="font-mono text-crimson-400">{item.percentage}%</span>
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                 <div
-                  className="bg-indigo-500 h-full rounded-full transition-all duration-700"
+                  className="bg-crimson-500 h-full rounded-full transition-all duration-700"
                   style={{ width: `${Math.min(100, Math.max(0, item.percentage))}%` }}
                 ></div>
               </div>
@@ -84,14 +84,14 @@ export const StoryGenomeCard: React.FC<StoryGenomeCardProps> = ({ genome }) => {
       {/* Tropes Pills */}
       <div className="space-y-2 pt-2 border-t border-slate-800">
         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center space-x-1.5">
-          <Tag className="w-3 h-3 text-indigo-400" />
+          <Tag className="w-3 h-3 text-crimson-400" />
           <span>Detected High-Engagement Tropes</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {(genome?.detectedTropes || []).map((trope, i) => (
             <span
               key={i}
-              className="px-2.5 py-1 rounded bg-indigo-900/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-medium"
+              className="px-2.5 py-1 rounded bg-crimson-900/20 text-crimson-300 border border-crimson-500/30 text-[10px] font-medium"
             >
               #{trope}
             </span>

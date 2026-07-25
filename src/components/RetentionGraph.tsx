@@ -43,7 +43,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-indigo-900/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded bg-crimson-900/20 border border-crimson-500/30 flex items-center justify-center text-crimson-400">
             <TrendingDown className="w-4 h-4" />
           </div>
           <div>
@@ -56,7 +56,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
 
         <div className="flex items-center space-x-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
           <div className="flex items-center space-x-1.5">
-            <span className="w-3 h-0.5 bg-indigo-500 inline-block"></span>
+            <span className="w-3 h-0.5 bg-crimson-500 inline-block"></span>
             <span>Forecasted</span>
           </div>
           <div className="flex items-center space-x-1.5">
@@ -93,7 +93,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
                   const data = payload[0].payload as RetentionSegment;
                   return (
                     <div className="bg-[#0F1014] border border-slate-800 p-3 rounded text-xs space-y-1">
-                      <p className="font-bold text-indigo-400">{data.timestamp}</p>
+                      <p className="font-bold text-crimson-400">{data.timestamp}</p>
                       <p className="text-white">
                         Retention: <span className="font-mono">{data.retentionPercent}%</span>
                       </p>
@@ -127,7 +127,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
             onClick={() => setSelectedPointIndex(idx)}
             className={`px-3 py-1.5 rounded text-[10px] font-bold shrink-0 border transition-all ${
               selectedPointIndex === idx
-                ? 'bg-indigo-900/20 text-indigo-300 border-indigo-500'
+                ? 'bg-crimson-900/20 text-crimson-300 border-crimson-500'
                 : 'bg-[#0F1014] text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-200'
             }`}
           >
@@ -142,7 +142,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
         <div className="bg-[#0F1014] border border-slate-800 rounded p-4.5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Clock className="w-3 h-3 text-indigo-400" />
+              <Clock className="w-3 h-3 text-crimson-400" />
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 Timestamp {selectedPoint.timestamp} Segment Analysis
               </span>
@@ -173,7 +173,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
           {/* Actionable Fix */}
           <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-xs space-y-0.5">
-              <span className="text-indigo-400 font-bold text-[10px] uppercase tracking-widest flex items-center space-x-1">
+              <span className="text-crimson-400 font-bold text-[10px] uppercase tracking-widest flex items-center space-x-1">
                 <Sparkles className="w-3 h-3" />
                 <span>Recommended Script Fix:</span>
               </span>
@@ -185,7 +185,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
                 onClick={() =>
                   onOpenSandboxWithFix(selectedPoint.suggestedFix, selectedPoint.sceneExcerpt)
                 }
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] uppercase font-bold rounded transition-colors shrink-0 flex items-center space-x-1"
+                className="px-3 py-1.5 bg-crimson-600 hover:bg-crimson-500 text-white text-[10px] uppercase font-bold rounded transition-colors shrink-0 flex items-center space-x-1"
               >
                 <span>Fix in Sandbox</span>
                 <ArrowRight className="w-3 h-3" />

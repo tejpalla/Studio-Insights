@@ -34,7 +34,7 @@ export const HookAnalysisCard: React.FC<HookAnalysisCardProps> = ({ hook, onSend
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-indigo-900/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded bg-crimson-900/20 border border-crimson-500/30 flex items-center justify-center text-crimson-400">
             <Zap className="w-4 h-4" />
           </div>
           <div>
@@ -89,9 +89,9 @@ export const HookAnalysisCard: React.FC<HookAnalysisCardProps> = ({ hook, onSend
       </div>
 
       {/* AI Recommended Hook Script Box */}
-      <div className="bg-[#0F1014] border border-indigo-500/30 rounded p-4 space-y-3 relative">
+      <div className="bg-[#0F1014] border border-crimson-500/30 rounded p-4 space-y-3 relative">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-indigo-400 text-[10px] font-bold uppercase tracking-widest">
+          <div className="flex items-center space-x-2 text-crimson-400 text-[10px] font-bold uppercase tracking-widest">
             <Sparkles className="w-3 h-3" />
             <span>AI Optimized Audio Hook Script Recommendation</span>
           </div>
@@ -108,7 +108,7 @@ export const HookAnalysisCard: React.FC<HookAnalysisCardProps> = ({ hook, onSend
             {onSendToSandbox && (
               <button
                 onClick={() => onSendToSandbox(hook?.suggestedOpeningHook || '')}
-                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] uppercase font-bold rounded transition-colors flex items-center space-x-1"
+                className="px-2.5 py-1 bg-crimson-600 hover:bg-crimson-500 text-white text-[10px] uppercase font-bold rounded transition-colors flex items-center space-x-1"
               >
                 <Radio className="w-3 h-3" />
                 <span>Open in Sandbox</span>

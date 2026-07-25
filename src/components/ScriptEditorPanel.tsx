@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { StoryScript, StoryEpisode } from '../types';
 import { SAMPLE_SCRIPTS } from '../data/sampleScripts';
-import { Play, Sparkles, Plus, Trash2, BookOpen, Layers, Clock, AlertCircle, Upload } from 'lucide-react';
+import { Play, Sparkles, Plus, Trash2, BookOpen, Layers, Clock, AlertCircle, Upload, Download } from 'lucide-react';
 
 interface ScriptEditorPanelProps {
   currentScript: StoryScript;
@@ -10,6 +10,7 @@ interface ScriptEditorPanelProps {
   isAnalyzing: boolean;
   selectedModel: string;
   setSelectedModel: (model: string) => void;
+  onDownloadScript: () => void;
 }
 
 export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
@@ -19,6 +20,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
   isAnalyzing,
   selectedModel,
   setSelectedModel,
+  onDownloadScript,
 }) => {
   const [selectedSampleId, setSelectedSampleId] = useState<string>(SAMPLE_SCRIPTS[0].id);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,11 +142,11 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
     <div className="space-y-6">
       {/* Top Banner & Sample Preset Selector */}
       <div className="bg-[#0A0A0C] border border-slate-800 rounded p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-900/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-crimson-900/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 relative">
           <div>
-            <div className="flex items-center space-x-2 text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">
+            <div className="flex items-center space-x-2 text-crimson-400 text-[10px] font-bold uppercase tracking-widest mb-1">
               <BookOpen className="w-3 h-3" />
               <span>Pre-Publication Script Hub</span>
             </div>
@@ -166,15 +168,24 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 bg-[#0F1014] hover:bg-slate-800 text-indigo-400 border border-slate-800 font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 shrink-0"
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-3 py-3 bg-[#0F1014] hover:bg-slate-800 text-crimson-400 border border-slate-800 font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 shrink-0"
+              title="Upload script text file"
             >
               <Upload className="w-4 h-4" />
               <span>Upload .TXT</span>
             </button>
             <button
+              onClick={onDownloadScript}
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-3 py-3 bg-[#0F1014] hover:bg-slate-800 text-crimson-400 border border-slate-800 font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 shrink-0"
+              title="Download edited script"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download Script</span>
+            </button>
+            <button
               onClick={() => onAnalyze(currentScript)}
               disabled={isAnalyzing}
-              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 disabled:opacity-50 shrink-0"
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3 bg-crimson-600 hover:bg-crimson-500 text-white font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 disabled:opacity-50 shrink-0"
             >
               <Sparkles className={`w-4 h-4 ${isAnalyzing ? 'animate-spin' : ''}`} />
               <span>{isAnalyzing ? 'Running AI Intelligence...' : 'Analyze Story Script'}</span>
@@ -191,7 +202,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full bg-[#0F1014] border border-slate-800 rounded p-2.5 text-xs text-white font-medium focus:outline-none focus:border-indigo-500"
+              className="w-full bg-[#0F1014] border border-slate-800 rounded p-2.5 text-xs text-white font-medium focus:outline-none focus:border-crimson-500"
             >
               <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
               <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
@@ -214,16 +225,16 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
                     onClick={() => handleSelectSample(sample)}
                     className={`text-left p-3 rounded border transition-all relative ${
                       isSelected
-                        ? 'bg-[#0F1014] border-indigo-500 text-white'
+                        ? 'bg-[#0F1014] border-crimson-500 text-white'
                         : 'bg-[#0A0A0C] border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-[#0F1014]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest truncate max-w-[120px]">
+                      <span className="text-[9px] font-bold text-crimson-400 uppercase tracking-widest truncate max-w-[120px]">
                         {sample.genre}
                       </span>
                       {isSelected && (
-                        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+                        <span className="w-2 h-2 rounded-full bg-crimson-400 animate-ping"></span>
                       )}
                     </div>
                     <h4 className="text-xs font-semibold truncate text-white tracking-tight">{sample.title}</h4>
@@ -252,7 +263,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               type="text"
               value={currentScript.title}
               onChange={(e) => handleTitleChange(e.target.value)}
-              className="w-full bg-[#0F1014] border border-slate-800 rounded px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full bg-[#0F1014] border border-slate-800 rounded px-4 py-2.5 text-xs text-white focus:outline-none focus:border-crimson-500 transition-colors"
               placeholder="e.g. The Billionaire's Secret Heir"
             />
           </div>
@@ -263,7 +274,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               type="text"
               value={currentScript.genre}
               onChange={(e) => handleGenreChange(e.target.value)}
-              className="w-full bg-[#0F1014] border border-slate-800 rounded px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full bg-[#0F1014] border border-slate-800 rounded px-4 py-2.5 text-xs text-white focus:outline-none focus:border-crimson-500 transition-colors"
               placeholder="e.g. Billionaire Romance / Revenge Drama"
             />
           </div>
@@ -275,7 +286,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
               Total Word Count: <strong className="text-white">{totalWords.toLocaleString()} words</strong>
             </span>
             <span>
-              Est. Audio Length: <strong className="text-indigo-400">{totalMinutes} mins</strong>
+              Est. Audio Length: <strong className="text-crimson-400">{totalMinutes} mins</strong>
             </span>
           </div>
           <span className="hidden sm:inline text-slate-500 uppercase tracking-widest font-bold">
@@ -296,7 +307,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
 
           <button
             onClick={handleAddEpisode}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#0F1014] hover:bg-slate-800 text-indigo-400 text-[10px] font-bold uppercase tracking-widest rounded transition-colors border border-slate-800"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#0F1014] hover:bg-slate-800 text-crimson-400 text-[10px] font-bold uppercase tracking-widest rounded transition-colors border border-slate-800"
           >
             <Plus className="w-3 h-3" />
             <span>Add Episode</span>
@@ -314,14 +325,14 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center space-x-3 flex-1">
-                  <span className="w-8 h-8 rounded bg-indigo-900/20 text-indigo-400 border border-indigo-500/30 font-bold text-[10px] flex items-center justify-center shrink-0">
+                  <span className="w-8 h-8 rounded bg-crimson-900/20 text-crimson-400 border border-crimson-500/30 font-bold text-[10px] flex items-center justify-center shrink-0">
                     E{ep.episodeNumber}
                   </span>
                   <input
                     type="text"
                     value={ep.title}
                     onChange={(e) => handleEpisodeChange(idx, 'title', e.target.value)}
-                    className="bg-[#0F1014] border border-slate-800 rounded px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-indigo-500 flex-1"
+                    className="bg-[#0F1014] border border-slate-800 rounded px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-crimson-500 flex-1"
                     placeholder={`Episode ${ep.episodeNumber} Title`}
                   />
                 </div>
@@ -351,7 +362,7 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
                   value={ep.scriptText}
                   onChange={(e) => handleEpisodeChange(idx, 'scriptText', e.target.value)}
                   rows={8}
-                  className="w-full bg-[#0F1014] border border-slate-800 rounded p-4 text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors leading-relaxed"
+                  className="w-full bg-[#0F1014] border border-slate-800 rounded p-4 text-xs font-mono text-slate-300 focus:outline-none focus:border-crimson-500 transition-colors leading-relaxed"
                   placeholder="Paste audio drama script snippet here..."
                 />
               </div>
@@ -361,16 +372,16 @@ export const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
       </div>
 
       {/* Bottom Floating Action Bar */}
-      <div className="sticky bottom-6 bg-[#0A0A0C] border border-indigo-500/30 rounded p-4 flex items-center justify-between">
+      <div className="sticky bottom-6 bg-[#0A0A0C] border border-crimson-500/30 rounded p-4 flex items-center justify-between">
         <div className="flex items-center space-x-3 text-[10px] text-slate-300 font-bold uppercase tracking-widest">
-          <AlertCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+          <AlertCircle className="w-4 h-4 text-crimson-400 shrink-0" />
           <span>Ready for pre-publication AI intelligence analysis.</span>
         </div>
 
         <button
           onClick={() => onAnalyze(currentScript)}
           disabled={isAnalyzing}
-          className="flex items-center space-x-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 disabled:opacity-50"
+          className="flex items-center space-x-2 px-6 py-2.5 bg-crimson-600 hover:bg-crimson-500 text-white font-bold text-[10px] uppercase tracking-widest rounded transition-all active:scale-95 disabled:opacity-50"
         >
           <Sparkles className={`w-4 h-4 ${isAnalyzing ? 'animate-spin' : ''}`} />
           <span>{isAnalyzing ? 'Analyzing Script...' : 'Run Story Intelligence IQ'}</span>

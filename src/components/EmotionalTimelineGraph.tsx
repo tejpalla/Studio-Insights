@@ -26,7 +26,7 @@ export const EmotionalTimelineGraph: React.FC<EmotionalTimelineGraphProps> = ({ 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-indigo-900/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded bg-crimson-900/20 border border-crimson-500/30 flex items-center justify-center text-crimson-400">
             <Heart className="w-4 h-4" />
           </div>
           <div>
@@ -43,7 +43,7 @@ export const EmotionalTimelineGraph: React.FC<EmotionalTimelineGraphProps> = ({ 
             <span>Intensity</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <span className="w-3 h-0.5 bg-indigo-400 inline-block"></span>
+            <span className="w-3 h-0.5 bg-crimson-400 inline-block"></span>
             <span>Valence</span>
           </div>
         </div>
@@ -70,7 +70,7 @@ export const EmotionalTimelineGraph: React.FC<EmotionalTimelineGraphProps> = ({ 
                   const data = payload[0].payload as EmotionalPoint;
                   return (
                     <div className="bg-[#0F1014] border border-slate-800 p-3 rounded text-xs space-y-1">
-                      <p className="font-bold text-indigo-400">{data.timestamp} - Scene {data.sceneNumber}</p>
+                      <p className="font-bold text-crimson-400">{data.timestamp} - Scene {data.sceneNumber}</p>
                       <p className="text-white">Emotion: <span className="font-semibold text-rose-400">{data.dominantEmotion}</span></p>
                       <p className="text-slate-300">Intensity: {data.intensity}% | Valence: {data.valence}</p>
                     </div>
@@ -105,7 +105,7 @@ export const EmotionalTimelineGraph: React.FC<EmotionalTimelineGraphProps> = ({ 
       {selectedPoint && (
         <div className="bg-[#0F1014] border border-slate-800 rounded p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center space-x-1.5">
+            <span className="text-[10px] font-bold text-crimson-400 uppercase tracking-widest flex items-center space-x-1.5">
               <Flame className="w-3 h-3 text-rose-400" />
               <span>Scene {selectedPoint.sceneNumber} ({selectedPoint.timestamp}) Emotional Pulse</span>
             </span>

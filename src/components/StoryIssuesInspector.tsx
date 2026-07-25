@@ -134,7 +134,7 @@ export const StoryIssuesInspector: React.FC<StoryIssuesInspectorProps> = ({
 
                 <button
                   onClick={() => onFixInSandbox(issue)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] uppercase tracking-widest rounded transition-all shrink-0"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-crimson-600 hover:bg-crimson-500 text-white font-bold text-[10px] uppercase tracking-widest rounded transition-all shrink-0"
                 >
                   <Sparkles className="w-3 h-3" />
                   <span>Fix with AI Sandbox</span>
@@ -149,8 +149,8 @@ export const StoryIssuesInspector: React.FC<StoryIssuesInspectorProps> = ({
               </div>
 
               {/* Proposed Resolution */}
-              <div className="bg-indigo-900/20 border border-indigo-500/30 p-3 rounded text-[10px] space-y-1">
-                <span className="font-bold text-indigo-400 uppercase tracking-widest">💡 AI Editorial Fix Strategy:</span>
+              <div className="bg-crimson-900/20 border border-crimson-500/30 p-3 rounded text-[10px] space-y-1">
+                <span className="font-bold text-crimson-400 uppercase tracking-widest">💡 AI Editorial Fix Strategy:</span>
                 <p className="text-slate-200">{issue.suggestedResolution}</p>
               </div>
 

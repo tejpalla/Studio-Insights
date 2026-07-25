@@ -10,7 +10,7 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
   const getTierBadge = (tier: string) => {
     switch (tier) {
       case 'S Tier':
-        return 'bg-indigo-900/20 text-indigo-300 border-indigo-500/30';
+        return 'bg-crimson-900/20 text-crimson-300 border-crimson-500/30';
       case 'A Tier':
         return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
       case 'B Tier':
@@ -21,7 +21,7 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-indigo-400';
+    if (score >= 85) return 'text-crimson-400';
     if (score >= 70) return 'text-emerald-400';
     if (score >= 55) return 'text-blue-400';
     return 'text-rose-400';
@@ -29,7 +29,7 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
 
   return (
     <div className="bg-[#0A0A0C] border border-slate-800 rounded p-6 space-y-6 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-0 right-0 w-80 h-80 bg-crimson-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
       {/* Title & Tier Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
@@ -61,7 +61,7 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
               <span className="text-sm font-normal text-slate-500">/100</span>
             </div>
           </div>
-          <div className="w-12 h-12 rounded bg-indigo-900/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-12 h-12 rounded bg-crimson-900/20 border border-crimson-500/30 flex items-center justify-center text-crimson-400">
             <Award className="w-6 h-6" />
           </div>
         </div>
@@ -71,7 +71,7 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Exec Summary Box */}
         <div className="lg:col-span-2 bg-[#0F1014] border border-slate-800 rounded p-4.5 space-y-2">
-          <div className="flex items-center space-x-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+          <div className="flex items-center space-x-2 text-crimson-400 text-xs font-bold uppercase tracking-wider">
             <ShieldCheck className="w-4 h-4" />
             <span>AI Editorial Executive Verdict</span>
           </div>
@@ -95,12 +95,12 @@ export const StoryOverviewHeader: React.FC<StoryOverviewHeaderProps> = ({ analys
           <div className="bg-[#0F1014] border border-slate-800 rounded p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Opening Hook Score</p>
-              <p className="text-xl font-bold text-indigo-400 mt-0.5">
+              <p className="text-xl font-bold text-crimson-400 mt-0.5">
                 {analysis?.hookAnalysis?.score ?? 'N/A'}
                 {analysis?.hookAnalysis?.score !== undefined && <span className="text-xs text-slate-500 font-normal">/100</span>}
               </p>
             </div>
-            <Zap className="w-5 h-5 text-indigo-400/80" />
+            <Zap className="w-5 h-5 text-crimson-400/80" />
           </div>
         </div>
       </div>

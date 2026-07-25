@@ -34,7 +34,7 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ benchmarks
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-indigo-900/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded bg-crimson-900/20 border border-crimson-500/30 flex items-center justify-center text-crimson-400">
             <BarChart2 className="w-4 h-4" />
           </div>
           <div>
@@ -45,7 +45,7 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ benchmarks
           </div>
         </div>
 
-        <div className="bg-[#0F1014] px-3 py-1 rounded border border-slate-800 text-[10px] text-indigo-400 uppercase tracking-widest font-bold flex items-center space-x-1.5">
+        <div className="bg-[#0F1014] px-3 py-1 rounded border border-slate-800 text-[10px] text-crimson-400 uppercase tracking-widest font-bold flex items-center space-x-1.5">
           <Award className="w-3 h-3" />
           <span>Pocket FM Top 10% Dataset</span>
         </div>
@@ -77,11 +77,11 @@ export const BenchmarkingPanel: React.FC<BenchmarkingPanelProps> = ({ benchmarks
               <div className="space-y-2 pt-1">
                 <div className="flex justify-between text-[10px]">
                   <span className="text-slate-400 font-medium">Your Script Score</span>
-                  <span className="font-bold text-indigo-400 font-mono">{item.currentScore}/100</span>
+                  <span className="font-bold text-crimson-400 font-mono">{item.currentScore}/100</span>
                 </div>
                 <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                   <div
-                    className="bg-indigo-500 h-full rounded-full transition-all duration-700"
+                    className="bg-crimson-500 h-full rounded-full transition-all duration-700"
                     style={{ width: `${item.currentScore}%` }}
                   ></div>
                 </div>
