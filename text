@@ -1,0 +1,21 @@
+{
+    "storyId": "sample-1",
+    "title": "The Billionaire's Secret Heir",
+    "genre": "Billionaire Romance / Revenge Drama",
+    "targetAudience": "Adults 18-35 (Serial Audio Listeners)",
+    "episodes": [
+        {
+            "id": "ep-1-1",
+            "episodeNumber": 1,
+            "title": "The $100 Million Divorce Settlement",
+            "scriptText": "[SFX: Thunder rumbling softly, rain hitting a heavy glass penthouse window]\n[SFX: High heels clicking forcefully against marble floors]\n\nNARRATOR (Dramatic, low tone):\nThree years ago, Clara Vance signed a secret marriage contract with Damian Vance—the ruthless billionaire CEO of Vance Global. She gave up her dreams, lived in silence, and endured the humiliation of his cold family. Today, on their wedding anniversary, she holds a signed divorce paper in her hand.\n\nCLARA (Firm, suppressed sorrow):\n\"Damian. It's over. I left the signed divorce papers on your desk. Keep your hundred million dollars. I don't want a single cent of Vance money.\"\n\nDAMIAN (Cold, deep chuckle, paper rustling):\n\"Clara, stop acting like a dramatic child. You are a nameless orphan I rescued from the streets. Without me, you are nothing. Where will you go?\"\n\nCLARA (Whispering, fierce):\n\"Far away from you.\"\n\n[SFX: Heavy oak door slamming shut]\n\nNARRATOR:\nDamian did not chase her. He assumed she would return within forty-eight hours on her knees. He did not know that Clara held a secret that would shatter his entire empire—she was pregnant with twins.\n\n[SFX: Car engine roaring in the rain, sudden tire screeching]\n\nCLARA (Internal Monologue):\n'Four years later... Damian, you thought you destroyed me. But today, my children and I return as the majority shareholders of your biggest rival.'\n\n[SFX: Dramatic suspense sting / cliffhanger music]"
+        },
+        {
+            "id": "ep-1-2",
+            "episodeNumber": 2,
+            "title": "The Return of Queen CEO",
+            "scriptText": "[SFX: Camera shutters flashing rapidly, chatter of reporters]\n\nNARRATOR:\nAt the annual Global Tech Summit in Manhattan, every billionaire was waiting to meet the mysterious new Chairwoman of Starlight Holdings. Damian Vance sat in the front row, confident his company would seal the $5 billion AI acquisition.\n\nHOST (On microphone):\n\"Ladies and gentlemen, welcome the Chairwoman and CEO of Starlight Holdings... Ms. Clara Vance!\"\n\n[SFX: Gasps across the auditorium, glass breaking as Damian drops his wine glass]\n\nDAMIAN (Stunned, furious whisper):\n\"Clara...? No... that's impossible. She died in a car crash four years ago!\"\n\nCLARA (Confident, clear voice over microphone):\n\"Thank you all for coming. Today, Starlight Holdings announces the full buyout of Vance Global's debt. Effective immediately, Damian Vance is stripped of his voting rights.\"\n\n[SFX: Heavy heartbeat pounding effect]\n\nNARRATOR:\nDamian stormed the stage, grabbing Clara's wrist in front of three hundred cameras.\n\nDAMIAN (Breathing heavily, eyes burning):\n\"Who gave you the power to ruin me? And who are those two children standing beside your bodyguard?\"\n\nCLARA (Smirking coldly, leaning close to his ear):\n\"They are the heirs you abandoned, Mr. Vance. And this is just the beginning of your nightmare.\"\n\n[SFX: High tension cliffhanger sting]"
+        }
+    ],
+    "model": "gemini-3.5-flash-lite"
+}

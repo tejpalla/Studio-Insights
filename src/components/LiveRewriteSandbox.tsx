@@ -4,12 +4,14 @@ import { Sparkles, Radio, Play, Pause, Copy, Check, RefreshCw, Volume2, ArrowRig
 interface LiveRewriteSandboxProps {
   initialSnippet?: string;
   initialInstruction?: string;
+  selectedModel: string;
   onApplyToScript?: (newSnippet: string) => void;
 }
 
 export const LiveRewriteSandbox: React.FC<LiveRewriteSandboxProps> = ({
   initialSnippet = '',
   initialInstruction = '',
+  selectedModel,
   onApplyToScript,
 }) => {
   const [originalSnippet, setOriginalSnippet] = useState<string>(
@@ -25,6 +27,7 @@ export const LiveRewriteSandbox: React.FC<LiveRewriteSandboxProps> = ({
   const [improvedSnippet, setImprovedSnippet] = useState<string>('');
   const [explanation, setExplanation] = useState<string>('');
   const [retentionGain, setRetentionGain] = useState<string>('');
+  const [rewriteError, setRewriteError] = useState<string | null>(null);
 
   // Audio preview state
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
@@ -36,6 +39,7 @@ export const LiveRewriteSandbox: React.FC<LiveRewriteSandboxProps> = ({
     if (!originalSnippet.trim()) return;
     setIsRewriting(true);
     setAudioError(null);
+    setRewriteError(null);
 
     try {
       const res = await fetch('/api/rewrite-scene', {
@@ -44,17 +48,24 @@ export const LiveRewriteSandbox: React.FC<LiveRewriteSandboxProps> = ({
         body: JSON.stringify({
           scriptSnippet: originalSnippet,
           instruction: instruction,
+          model: selectedModel,
         }),
       });
 
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Rewrite failed with status ${res.status}`);
+      }
       if (data.improvedSnippet) {
         setImprovedSnippet(data.improvedSnippet);
         setExplanation(data.explanation || 'Optimized dialogue flow and audio tension.');
         setRetentionGain(data.estimatedRetentionGain || '+15% retention gain');
+      } else {
+        throw new Error('The selected model did not return a rewritten scene.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Rewrite failed:', err);
+      setRewriteError(err.message || 'Unable to rewrite the scene.');
     } finally {
       setIsRewriting(false);
     }
@@ -142,6 +153,12 @@ export const LiveRewriteSandbox: React.FC<LiveRewriteSandboxProps> = ({
           <span>{isRewriting ? 'Doctoring Script...' : 'Optimize Scene with AI'}</span>
         </button>
       </div>
+
+      {rewriteError && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+          {rewriteError}
+        </div>
+      )}
 
       {/* Instruction Prompt Input */}
       <div className="bg-slate-950 border border-slate-800/80 p-4 rounded-xl space-y-2">

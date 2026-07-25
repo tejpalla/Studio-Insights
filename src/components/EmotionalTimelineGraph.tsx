@@ -55,7 +55,7 @@ export const EmotionalTimelineGraph: React.FC<EmotionalTimelineGraphProps> = ({ 
           <LineChart
             data={timeline}
             onClick={(e) => {
-              if (e && e.activeTooltipIndex !== undefined) {
+              if (e && typeof e.activeTooltipIndex === 'number') {
                 setSelectedPointIndex(e.activeTooltipIndex);
               }
             }}

@@ -72,7 +72,7 @@ export const RetentionGraph: React.FC<RetentionGraphProps> = ({
           <AreaChart
             data={retentionData}
             onClick={(e) => {
-              if (e && e.activeTooltipIndex !== undefined) {
+              if (e && typeof e.activeTooltipIndex === 'number') {
                 setSelectedPointIndex(e.activeTooltipIndex);
               }
             }}

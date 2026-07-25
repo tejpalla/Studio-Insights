@@ -271,6 +271,7 @@ export default function App() {
             <LiveRewriteSandbox
               initialSnippet={sandboxSnippet}
               initialInstruction={sandboxInstruction}
+              selectedModel={selectedModel}
               onApplyToScript={handleApplyToScript}
             />
           )}

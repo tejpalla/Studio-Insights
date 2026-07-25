@@ -449,8 +449,11 @@ Return JSON strictly adhering to the specified schema:
 // 2. Rewrite Scene Endpoint
 app.post('/api/rewrite-scene', async (req, res) => {
   try {
-    const { scriptSnippet, issueDescription, instruction } = req.body;
-    const ai = getGeminiClient();
+    const { scriptSnippet, issueDescription, instruction, model = 'gemini-2.5-flash' } = req.body;
+
+    if (!scriptSnippet || !scriptSnippet.trim()) {
+      return res.status(400).json({ error: 'A script snippet is required.' });
+    }
 
     const prompt = `You are a world-class audio drama script doctor for serial platforms like Pocket FM.
 Rewrite the following audio script snippet to maximize listener retention, emotional tension, dialogue punchiness, and SFX atmosphere.
@@ -472,8 +475,25 @@ Return JSON strictly adhering to schema:
 - estimatedRetentionGain: string (e.g. "+14% retention at 01:15")
 `;
 
+    if (model.startsWith('gpt-') || model.startsWith('o1-') || model.startsWith('o3-')) {
+      const openai = getOpenAIClient();
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a world-class audio drama script doctor. Return valid JSON matching the requested schema.' },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+      });
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error('OpenAI returned an empty rewrite.');
+      return res.json(JSON.parse(content));
+    }
+
+    const ai = getGeminiClient();
     const result = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model,
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -488,7 +508,8 @@ Return JSON strictly adhering to schema:
       },
     });
 
-    res.json(JSON.parse(result.text || '{}'));
+    if (!result.text) throw new Error('Gemini returned an empty rewrite.');
+    return res.json(JSON.parse(result.text));
   } catch (error: any) {
     console.error('Rewrite error:', error);
     res.status(500).json({ error: 'Failed to rewrite script snippet.' });
