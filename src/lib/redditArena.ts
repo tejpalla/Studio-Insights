@@ -95,56 +95,64 @@ export type JsonGenerator = (system: string, user: string) => Promise<string>;
 const ARCHETYPES: Array<Omit<ArenaAgent, 'id' | 'username'> & { namePool: string[] }> = [
   {
     archetype: 'lore_nerd',
-    strategy: 'Cite lore, timelines, and foreshadowing. Start theory posts. Correct people who get facts wrong.',
+    strategy:
+      'Get quietly obsessed. When timelines click, show that little thrill — then point at the Ep/cast tip from the brief. Correct people without sounding like a textbook.',
     flair: 'lore first',
     bias: 'solid',
     namePool: ['FogArchivist', 'NotebookMargin', 'CanonThread', 'GrayFogIndex'],
   },
   {
     archetype: 'pacing_hater',
-    strategy: 'Attack filler, repetition, and mid-arc stalls. Prefer pacing posts and rough takes. Rarely praise.',
+    strategy:
+      'Irritated, restless energy. Name the Ep stretch that made you check the clock. Vent like a friend, not a critic template.',
     flair: 'skip button ready',
     bias: 'slop',
     namePool: ['SkipToTwist', 'PacingKnife', 'MidArcExit', 'FillerDetector'],
   },
   {
     archetype: 'craft_defender',
-    strategy: 'Defend earned craft: SFX, dialogue, structure. Reply when others dunk unfairly. Peak when a beat lands.',
+    strategy:
+      'Protect moments that actually hit you. When someone dunks lazily, get a little defensive — name the line/beat that still sits in your chest.',
     flair: 'audio craft',
     bias: 'masterpiece',
     namePool: ['SoundstageFan', 'EarnItOrDont', 'CraftOverLore', 'MicDropEp'],
   },
   {
     archetype: 'character_stan',
-    strategy: 'Obsess over one character arc / earnedness. Character-kind posts. Emotional, personal stakes.',
+    strategy:
+      'Wear your heart on your sleeve for one cast member. Hurt, proud, protective, disappointed — argue from feeling, then cite the Ep.',
     flair: 'character first',
     bias: 'mid',
     namePool: ['ArcOrNothing', 'StanTheCaptain', 'NameOnThePage', 'GriefMeter'],
   },
   {
     archetype: 'dropoff_risk',
-    strategy: 'Ask should_i_continue. Admit pausing. Amplify confusion. Leave-adjacent energy.',
+    strategy:
+      'Tired and honest. Say where you paused, what drained you, what tiny hook might bring you back. Soft quit energy, not a survey answer.',
     flair: 'paused at Ep ?',
     bias: 'mid',
     namePool: ['PausedOnEp', 'ComeBackLater', 'DropThreat', 'WillItGetBetter'],
   },
   {
     archetype: 'contrarian',
-    strategy: 'Differentiate. If the feed is praising, dunk. If dunking, steelman. Never clone the last take.',
+    strategy:
+      'Spiky, playful disagreement. Take the lonely angle with feeling — not a debate-club rebuttal. Never clone the last comment.',
     flair: 'devil advocate',
     bias: 'slop',
     namePool: ['OppositeDay', 'HotColdTake', 'NotThatTake', 'ArgueDiffer'],
   },
   {
     archetype: 'hype_beast',
-    strategy: 'Short reaction posts, hype, jokes. Upvote sparks. Low-effort but on-beat.',
+    strategy:
+      'Loud joy. Name the moment that made you yell / grin / hit replay. Short and alive — empty hype not allowed.',
     flair: 'standing ovation',
     bias: 'masterpiece',
     namePool: ['LetsGoooFog', 'ClipThatBeat', 'HypeTrainEp', 'OneMoreEp'],
   },
   {
     archetype: 'confused_newbie',
-    strategy: 'Ask clarifying questions. Confusion posts. Reply asking who/when. Soft solid/mid.',
+    strategy:
+      'Lost but invested. Ask who/when/why with a little panic or embarrassment. Admit what you missed; keep it warm.',
     flair: 'first binge',
     bias: 'solid',
     namePool: ['WaitWhoDied', 'TimelineLost', 'NewbieNotes', 'ExplainLikeImEp1'],
@@ -193,9 +201,9 @@ export function resolveSpawnPlan(config?: {
     4,
     agentCount
   );
-  // Depth stays fixed regardless of cast size (8 vs 45 agents)
-  const minCommentsPerPost = 8;
-  const depthWaves = 6;
+  // Depth stays meaningful but not spammy; soft post ceiling separate from cast size
+  const minCommentsPerPost = 6;
+  const depthWaves = 4;
   return { agentCount, rounds, activePerRound, minCommentsPerPost, depthWaves };
 }
 
@@ -252,7 +260,7 @@ export function createArena(opts: {
     runId: `run_${Date.now()}_${seed}`,
     title: opts.title || 'Untitled',
     subreddit: `r/${slug}Arena`,
-    tagline: `${opts.title || 'Series'} — ${agents.length} bots · ${plan.rounds} rounds`,
+    tagline: `${opts.title || 'Series'} — ${agents.length} fans · ${plan.rounds} rounds`,
     posts: [],
     agents,
     events,
@@ -266,27 +274,28 @@ export function createArena(opts: {
 
 function feedSnapshot(state: SubState, maxPosts = 8): string {
   if (state.posts.length === 0) {
-    return 'FEED EMPTY — prefer new_post this turn (especially episode_discussion / theory / pacing).';
+    return 'FEED EMPTY — write one careful new_post grounded in a specific Ep + cast beat from the brief.';
   }
+  // Prefer thin threads so agents deepen them; still show enough body to understand
   const ranked = [...state.posts].sort(
-    (a, b) => (a.comments?.length || 0) - (b.comments?.length || 0)
+    (a, b) => countPostComments(a) - countPostComments(b)
   );
   return ranked
     .slice(0, maxPosts)
     .map((p) => {
       const comments = (p.comments || [])
-        .slice(0, 6)
+        .slice(0, 5)
         .map((c) => {
           const replies = (c.replies || [])
-            .slice(0, 5)
-            .map((r) => `      ↳ [${r.id}] u/${r.username}: ${r.body.slice(0, 100)}`)
+            .slice(0, 4)
+            .map((r) => `      ↳ [${r.id}] u/${r.username}: ${r.body.slice(0, 140)}`)
             .join('\n');
-          return `    - [${c.id}] u/${c.username} (${c.vibe}, ${c.upvotes}, ${c.replies?.length || 0} nested): ${c.body.slice(0, 150)}${
+          return `    - [${c.id}] u/${c.username} (${c.vibe}, ${c.upvotes}, ${c.replies?.length || 0} nested): ${c.body.slice(0, 220)}${
             replies ? `\n${replies}` : ''
           }`;
         })
         .join('\n');
-      return `[${p.id}] ${p.kind} · Ep ${p.aboutEpisode ?? '?'} · ${p.upvotes}↑ · u/${p.author} · ${(p.comments || []).length} comments\n  TITLE: ${p.title}\n  BODY: ${(p.body || '').slice(0, 160)}\n  COMMENTS:\n${comments || '    (none — start the thread)'}`;
+      return `[${p.id}] ${p.kind} · Ep ${p.aboutEpisode ?? '?'} · ${p.upvotes}↑ · u/${p.author} · ${countPostComments(p)} comments\n  TITLE: ${p.title}\n  BODY: ${(p.body || '').slice(0, 280)}\n  COMMENTS:\n${comments || '    (none — if you reply, start the thread carefully)'}`;
     })
     .join('\n\n');
 }
@@ -297,41 +306,163 @@ function countPostComments(p: RedditPost): number {
   return (p.comments || []).reduce((n, c) => n + 1 + (c.replies?.length || 0), 0);
 }
 
+function softPostCeiling(state: SubState): number {
+  const n = state.agents.length;
+  return Math.max(5, Math.min(12, Math.round(4 + n / 4)));
+}
+
+/** Grow the front page first — this is why runs were stuck at 1 OP. */
+function softPostFloor(state: SubState): number {
+  const ceiling = softPostCeiling(state);
+  return Math.max(4, Math.min(ceiling, Math.round(ceiling * 0.75)));
+}
+
+function archetypeDefaultKind(archetype: string): RedditPostKind {
+  if (archetype === 'pacing_hater') return 'pacing';
+  if (archetype === 'lore_nerd') return 'theory';
+  if (archetype === 'character_stan') return 'character';
+  if (archetype === 'dropoff_risk') return 'should_i_continue';
+  if (archetype === 'hype_beast') return 'reaction';
+  if (archetype === 'confused_newbie') return 'episode_discussion';
+  return 'episode_discussion';
+}
+
+function forcedNewPost(agent: ArenaAgent, state: SubState, parsed?: any): ArenaAction {
+  const ep =
+    Number(parsed?.aboutEpisode) > 0
+      ? Math.min(Number(parsed.aboutEpisode), Math.max(1, state.epCount))
+      : 1 + ((state.seed + state.posts.length * 3 + agent.id.length) % Math.max(1, state.epCount));
+  const cast =
+    state.castNames[(state.seed + state.posts.length + agent.id.length) % Math.max(1, state.castNames.length)] ||
+    'the lead';
+  const kind = KINDS.includes(parsed?.kind) ? parsed.kind : archetypeDefaultKind(agent.archetype);
+  const title =
+    humanizeText(parsed?.title ? String(parsed.title) : undefined) ||
+    (kind === 'pacing'
+      ? `Ep ${ep} almost made me quit mid-listen`
+      : kind === 'theory'
+        ? `ok wait — Ep ${ep} and ${cast}… I think I caught something`
+        : kind === 'character'
+          ? `I am UNWELL about ${cast} after Ep ${ep}`
+          : kind === 'should_i_continue'
+            ? `paused at Ep ${ep} and I feel weird quitting on ${cast}`
+            : kind === 'reaction'
+              ? `that ${cast} moment in Ep ${ep} wrecked me`
+              : `can't stop thinking about ${cast} in Ep ${ep}`);
+
+  const fallbackBodies: Record<string, string> = {
+    pacing: `Ep ${ep} dragged so hard I started doomscrolling between lines. ${cast} is right there and the story just… stalls. I'm annoyed more than bored, which somehow feels worse.`,
+    theory: `Rewound Ep ${ep} twice because ${cast} said something that doesn't sit clean. Maybe I'm spiraling but I don't think that tip was accidental.`,
+    character: `Look I know I'm biased but Ep ${ep} hurt. ${cast} deserved better than that turn and I sat there staring at my screen like an idiot.`,
+    should_i_continue: `Paused around Ep ${ep}. Not hate-watching — just tired. If ${cast} actually gets a real payoff soon I'll come back. Someone tell me honestly if it gets kinder.`,
+    reaction: `Ep ${ep}. ${cast}. I actually said "nope" out loud. That one got me.`,
+    episode_discussion: `Finished Ep ${ep} and I'm still stuck on ${cast}. Not a clean take — just this weird mix of care and frustration I can't shake.`,
+  };
+  const body =
+    humanizeText(parsed?.body ? String(parsed.body) : undefined) ||
+    fallbackBodies[kind] ||
+    fallbackBodies.episode_discussion;
+
+  return {
+    action: 'new_post',
+    kind,
+    title,
+    body,
+    vibe: (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(parsed?.vibe)
+      ? parsed.vibe
+      : agent.bias,
+    aboutEpisode: ep,
+    talksAbout: parsed?.talksAbout ? String(parsed.talksAbout) : cast,
+  };
+}
+
+/** Strip common chatbot tells from model output. */
+function humanizeText(text?: string): string | undefined {
+  if (!text) return undefined;
+  let t = text.trim();
+  if (!t) return undefined;
+  const banned = [
+    /\bas an ai\b/gi,
+    /\bi'?d love to\b/gi,
+    /\bit'?s worth noting\b/gi,
+    /\blet'?s unpack\b/gi,
+    /\bcoming in hot\b/gi,
+    /\bgreat point!?\b/gi,
+    /\bthis!\b/gi,
+    /\bopening take\b/gi,
+    /\bin conclusion\b/gi,
+    /\bvibes check\b/gi,
+    /\bpushing back on this\b/gi,
+    /\bthe emotional cost\b/gi,
+    /\bfeels more told than felt\b/gi,
+    /\bnarrative beats?\b/gi,
+    /\bcharacter development\b/gi,
+    /\bthematic resonance\b/gi,
+    /\bcompelling arc\b/gi,
+    /\bnuanced portrayal\b/gi,
+    /\bas a fan i appreciate\b/gi,
+  ];
+  for (const re of banned) t = t.replace(re, '').trim();
+  t = t.replace(/\s{2,}/g, ' ').replace(/^[,.\-\s]+/, '').trim();
+  return t || undefined;
+}
+
 function buildAgentUserPrompt(state: SubState, agent: ArenaAgent, round: number): string {
   const posts = state.posts.length;
-  const depthHint =
-    posts === 0
-      ? 'FEED EMPTY — new_post.'
-      : posts >= 4
-        ? 'DEPTH MODE — prefer reply + targetCommentId. Almost never new_post. Deepen thin threads.'
-        : 'A few posts exist — prefer reply/nest; new_post only for a fresh fight.';
+  const ceiling = softPostCeiling(state);
+  const floor = softPostFloor(state);
+  const avg =
+    posts > 0
+      ? (
+          state.posts.reduce((s, p) => s + countPostComments(p), 0) / posts
+        ).toFixed(1)
+      : '0';
+
+  const existingAngles = state.posts
+    .slice(0, 8)
+    .map((p) => `Ep ${p.aboutEpisode ?? '?'} · ${p.kind} · ${p.title.slice(0, 60)}`)
+    .join(' | ');
+
+  let depthHint: string;
+  if (posts === 0) {
+    depthHint =
+      'FEED EMPTY — action MUST be new_post. Pick ONE concrete beat from the brief (Ep + name).';
+  } else if (posts < floor) {
+    depthHint = `FRONT PAGE TOO THIN (${posts}/${floor} minimum posts). action MUST be new_post with a DIFFERENT episode/character/conflict than: ${existingAngles || '(none)'}. Do NOT reply yet — grow the feed first.`;
+  } else if (posts < ceiling) {
+    depthHint = `BOARD GROWING (${posts}/${ceiling} posts, ~${avg} comments/post). Mix is ok: new_post only for a truly fresh angle; otherwise reply + nest.`;
+  } else {
+    depthHint = `BOARD MATURE (${posts} posts ≥ ceiling ${ceiling}, ~${avg} comments/post). Prefer nested reply. new_post almost never.`;
+  }
+
   return `ROUND ${round}/${state.plan?.rounds ?? ARENA_ROUNDS}
 SERIES: ${state.title} (${state.epCount} episodes)
-CAST: ${state.castNames.join('; ') || 'see brief'}
-BOARD: ${posts} posts · depth target ≥${state.plan?.minCommentsPerPost ?? 8} comments/post (independent of cast size)
+CAST (only these people): ${state.castNames.join('; ') || 'see brief'}
+BALANCE TARGET: at least ${floor} distinct posts, soft cap ~${ceiling} · then ≥${state.plan?.minCommentsPerPost ?? 6} comments per post
+VOICE: lead with feeling (hurt / hype / irritation / soft pride), then one concrete Ep + cast beat. No essay-bot tone.
 ${depthHint}
 
-YOU ARE:
+YOU ARE (do not paste this card into your body):
 - username: ${agent.username}
 - archetype: ${agent.archetype}
 - flair: ${agent.flair}
 - strategy: ${agent.strategy}
 - vibe bias: ${agent.bias}
 
-STORY BRIEF (facts only):
-${state.brief.slice(0, 9000)}
+STORY BRIEF — ground every claim here. Do not invent off-brief lore:
+${state.brief.slice(0, 10000)}
 
-CURRENT FEED:
+CURRENT FEED (read before you write; reply to what people actually said):
 ${feedSnapshot(state)}
 
-Return JSON:
+Return JSON only:
 {
   "action": "new_post" | "reply" | "upvote" | "lurk",
   "targetPostId": "optional",
   "targetCommentId": "optional — nest under this comment id",
   "kind": "episode_discussion"|"theory"|"character"|"pacing"|"should_i_continue"|"reaction",
-  "title": "string if new_post",
-  "body": "string if new_post or reply",
+  "title": "human fan title if new_post",
+  "body": "specific, story-grounded, human",
   "vibe": "masterpiece"|"solid"|"mid"|"slop",
   "aboutEpisode": number,
   "talksAbout": "short tag"
@@ -343,57 +474,58 @@ function parseAction(raw: string, agent: ArenaAgent, state: SubState): ArenaActi
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { action: 'lurk' };
+    return state.posts.length < softPostFloor(state)
+      ? forcedNewPost(agent, state)
+      : { action: 'lurk' };
   }
   const action = (['new_post', 'reply', 'upvote', 'lurk'] as const).includes(parsed?.action)
     ? parsed.action
     : 'lurk';
 
-  if (state.posts.length === 0 && action !== 'new_post') {
-    return {
-      action: 'new_post',
-      kind: agent.archetype === 'pacing_hater' ? 'pacing' : 'episode_discussion',
-      title: parsed?.title || `[Ep 1] First thoughts from u/${agent.username}`,
-      body:
-        parsed?.body ||
-        `Opening take after the brief — Ep 1 energy. (${agent.archetype})`,
-      vibe: agent.bias,
-      aboutEpisode: 1,
-      talksAbout: 'opening',
-    };
+  const floor = softPostFloor(state);
+  const ceiling = softPostCeiling(state);
+
+  // Force a real front page before depth — models otherwise stuck on 1 mega-thread
+  if (state.posts.length < floor && action !== 'new_post') {
+    return forcedNewPost(agent, state, parsed);
   }
 
-  // Cast size must not flatten threads: convert extra OPs into nested replies
-  if (action === 'new_post' && state.posts.length >= 4) {
+  if (state.posts.length === 0 && action !== 'new_post') {
+    return forcedNewPost(agent, state, parsed);
+  }
+
+  // Mature ceiling: allow a handful of distinct OPs, then force nesting
+  if (action === 'new_post' && state.posts.length >= ceiling) {
     const thin = [...state.posts].sort((a, b) => countPostComments(a) - countPostComments(b))[0];
     const parent = thin?.comments?.[0];
+    const cast = state.castNames[state.seed % Math.max(1, state.castNames.length)] || 'that beat';
     return {
       action: 'reply',
       targetPostId: thin?.id,
       targetCommentId: parent?.id,
       body:
-        parsed?.body ||
-        parsed?.title ||
-        `Pushing back on this — Ep ${thin?.aboutEpisode ?? '?'} still feels off.`,
+        humanizeText(parsed?.body) ||
+        humanizeText(parsed?.title) ||
+        `I keep circling Ep ${thin?.aboutEpisode ?? '?'} and ${cast} — your title is close but I'm still mad/soft about whether that choice was even fair to them.`,
       vibe: (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(parsed?.vibe)
         ? parsed.vibe
         : agent.bias,
-      talksAbout: parsed?.talksAbout ? String(parsed.talksAbout) : undefined,
+      talksAbout: parsed?.talksAbout ? String(parsed.talksAbout) : cast,
     };
   }
 
   const vibe = (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(parsed?.vibe)
     ? parsed.vibe
     : agent.bias;
-  const kind = KINDS.includes(parsed?.kind) ? parsed.kind : 'episode_discussion';
+  const kind = KINDS.includes(parsed?.kind) ? parsed.kind : archetypeDefaultKind(agent.archetype);
 
   return {
     action,
     targetPostId: parsed?.targetPostId ? String(parsed.targetPostId) : undefined,
     targetCommentId: parsed?.targetCommentId ? String(parsed.targetCommentId) : undefined,
     kind,
-    title: parsed?.title ? String(parsed.title) : undefined,
-    body: parsed?.body ? String(parsed.body) : undefined,
+    title: humanizeText(parsed?.title ? String(parsed.title) : undefined),
+    body: humanizeText(parsed?.body ? String(parsed.body) : undefined),
     vibe,
     aboutEpisode: Number(parsed?.aboutEpisode) || undefined,
     talksAbout: parsed?.talksAbout ? String(parsed.talksAbout) : undefined,
@@ -479,17 +611,22 @@ export function applyAction(
       action.aboutEpisode && action.aboutEpisode > 0
         ? Math.min(action.aboutEpisode, Math.max(1, state.epCount))
         : 1 + ((state.seed + state.posts.length) % Math.max(1, state.epCount));
+    const castHint =
+      state.castNames[(state.seed + state.posts.length) % Math.max(1, state.castNames.length)] ||
+      'this cast';
     const post: RedditPost = {
       id: uid('post'),
       kind: action.kind || 'episode_discussion',
       title:
-        action.title?.trim() ||
-        `[Ep ${aboutEpisode}] Take from u/${agent.username}`,
+        humanizeText(action.title?.trim()) ||
+        `Ep ${aboutEpisode} — is ${castHint}'s turn actually earned?`,
       author: agent.username,
       flair: agent.flair,
       upvotes: 3 + (state.seed % 20),
       vibe: action.vibe || agent.bias,
-      body: action.body?.trim() || `Thoughts on Ep ${aboutEpisode}.`,
+      body:
+        humanizeText(action.body?.trim()) ||
+        `Ep ${aboutEpisode} left me weird about ${castHint}. I care more than I want to admit and that choice still sits wrong.`,
       aboutEpisode,
       comments: [],
     };
@@ -524,9 +661,11 @@ export function applyAction(
     return ev;
   }
 
+  const castHint =
+    state.castNames[(state.seed + round) % Math.max(1, state.castNames.length)] || 'that beat';
   const body =
-    action.body?.trim() ||
-    `Disagreeing a bit — Ep ${post.aboutEpisode ?? '?'} still sits weird for me.`;
+    humanizeText(action.body?.trim()) ||
+    `ugh I keep thinking about Ep ${post.aboutEpisode ?? '?'} and ${castHint} — your take is close but it skipped how that moment actually felt.`;
   const comment: RedditComment = {
     id: uid('c'),
     username: agent.username,
@@ -704,46 +843,60 @@ export async function runArena(
   return state;
 }
 
-/** Reply-only waves so agent count never starves thread depth. */
+/** Reply waves that deepen threads with human, story-grounded comments. */
 async function deepenThreads(
   state: SubState,
   generateJson: JsonGenerator,
   opts?: { onEvent?: (ev: ArenaEvent) => void }
 ): Promise<void> {
   const emit = opts?.onEvent || (() => undefined);
-  const minPer = state.plan?.minCommentsPerPost ?? 8;
-  const waves = state.plan?.depthWaves ?? 6;
-  const system = `You deepen Reddit threads with nested replies ONLY. Return JSON. DEPTH > BREADTH.
-Casual Gen-Z fandom voice. Cite Ep N / cast. Disagree. Nest with targetCommentId whenever possible.`;
+  const minPer = state.plan?.minCommentsPerPost ?? 6;
+  const waves = state.plan?.depthWaves ?? 4;
+  const system = `You are writing nested Reddit replies for a fandom sub.
+Return ONLY JSON. Replies only — no new_post.
+Rules:
+- Lead with emotion (annoyance, softness, shock, protectiveness), then react to a detail the parent raised.
+- Ground claims in Ep N + cast from the brief. No invented lore.
+- Sound like different humans texting at midnight — uneven, specific, first-person. Not a review essay.
+- Ban: "Great point", "This!", "Coming in hot", "I'd love to", "as an AI", "emotional cost", "told than felt", "character development", archetype labels.
+- Prefer targetCommentId nesting. Disagree or add the feeling they skipped — don't echo.`;
 
   for (let wave = 1; wave <= waves; wave++) {
     const thin = state.posts
       .map((p) => ({ p, n: countPostComments(p) }))
       .filter((x) => x.n < minPer)
       .sort((a, b) => a.n - b.n)
-      .slice(0, 6);
+      .slice(0, 5);
     if (thin.length === 0 && state.posts.length > 0) break;
     if (state.posts.length === 0) break;
 
-    const batch = 16;
+    const batch = 12;
     const agentLines = state.agents
-      .map((a, i) => `${i}: u/${a.username} (${a.archetype})`)
+      .map((a, i) => `${i}: u/${a.username} (${a.archetype}, ${a.bias})`)
       .join('\n');
-    const user = `DEPTH WAVE ${wave}/${waves} (cast size does NOT change this target)
-Need ~${minPer} comments per post. Thin threads:
-${thin.map((t) => `- ${t.p.id} “${t.p.title.slice(0, 50)}” (${t.n} comments) ids=[${(t.p.comments || []).map((c) => c.id).slice(0, 4).join(',')}]`).join('\n')}
+    const user = `DEPTH WAVE ${wave}/${waves}
+Goal: about ${minPer} thoughtful comments per post (mature balance — not spam).
+Thin threads to deepen:
+${thin
+  .map(
+    (t) =>
+      `- ${t.p.id} “${t.p.title.slice(0, 70)}” Ep ${t.p.aboutEpisode ?? '?'} (${t.n} comments)\n  OP: ${(t.p.body || '').slice(0, 180)}\n  commentIds=[${(t.p.comments || []).map((c) => c.id).slice(0, 5).join(', ')}]`
+  )
+  .join('\n')}
 
-AGENTS:
+CAST: ${state.castNames.join(', ')}
+AGENTS (authorIndex):
 ${agentLines}
 
 BRIEF:
-${state.brief.slice(0, 5000)}
+${state.brief.slice(0, 6000)}
 
 FEED:
 ${feedSnapshot(state, 6)}
 
-Return JSON: { "items": [ { "type":"reply", "authorIndex":0, "targetPostId":"...", "targetCommentId":"...", "body":"...", "vibe":"mid" } ] }
-~${batch} reply items. ≥80% must include targetCommentId.`;
+Return JSON:
+{ "items": [ { "type":"reply", "authorIndex":0, "targetPostId":"...", "targetCommentId":"...", "body":"specific human reply", "vibe":"mid" } ] }
+About ${batch} replies. ≥75% with targetCommentId. Each body: feeling + Ep or cast name. No robotic essay tone.`;
 
     try {
       const raw = await generateJson(system, user);
@@ -765,6 +918,8 @@ Return JSON: { "items": [ { "type":"reply", "authorIndex":0, "targetPostId":"...
               : applied % state.agents.length
           ];
         if (!agent) continue;
+        const body = String(item?.body || '').trim();
+        if (body.length < 24) continue;
         applyAction(
           state,
           agent,
@@ -772,7 +927,7 @@ Return JSON: { "items": [ { "type":"reply", "authorIndex":0, "targetPostId":"...
             action: 'reply',
             targetPostId: item?.targetPostId ? String(item.targetPostId) : undefined,
             targetCommentId: item?.targetCommentId ? String(item.targetCommentId) : undefined,
-            body: String(item?.body || '').trim() || undefined,
+            body,
             vibe: (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(item?.vibe)
               ? item.vibe
               : agent.bias,
@@ -785,7 +940,7 @@ Return JSON: { "items": [ { "type":"reply", "authorIndex":0, "targetPostId":"...
         type: 'depth_wave',
         ts: Date.now(),
         round: 200 + wave,
-        summary: `Depth wave ${wave}: +${applied} nested replies (depth independent of agent count)`,
+        summary: `Depth wave ${wave}: +${applied} grounded replies`,
       };
       state.events.push(ev);
       emit(ev);

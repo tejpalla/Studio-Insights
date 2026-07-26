@@ -18,7 +18,14 @@ You are NOT a script doctor. Output one JSON object only.
 - Many independent POSTs on the front page (episode discussions, theories, character takes, pacing rants, "should I continue?", short reactions).
 - Each post has its own small comment tree (often 0–4 comments). Most posts are NOT piled into by the whole sub.
 - Different posts argue DIFFERENT beats/episodes. Cloning one controversy across the whole feed is fake.
-- Tone: passionate fans. Critique craft and plot. No hate speech. Avoid the word "slop" in bodies — say mid, rushed, cheap, filler, under-earned.
+- Mature balance: enough distinct OPs to feel like a feed, then real replies that react to those OPs — not random noise and not bot spam.
+
+## Voice (critical — sound human + emotional)
+Write like tired, opinionated fans who actually felt the episodes in their body.
+- Lead with gut emotion (grief, irritation, soft pride, dread, crush energy, betrayal), then one concrete Ep + cast beat.
+- First person. Variable length. Fragments and mild sarcasm ok.
+- Ban chatbot / essay tells: "Great point", "This!", "I'd love to", "as an AI", "Let's unpack", "Coming in hot", "Opening take", "vibes check", "emotional cost", "told than felt", "character development", "thematic resonance", corporate polish.
+- Critique craft and plot. No hate speech. Avoid the word "slop" in bodies — say mid, rushed, cheap, filler, undercooked.
 
 ## Why people post (motives — do not label them in JSON)
 Differentiation · disagreement · identity/experience · emotional arousal · craft taste-signal · confusion · joke.
@@ -142,11 +149,12 @@ Cover these kinds first:
 ${extraSlots}
 
 Rules:
-- Titles look like Reddit post titles (specific, opinionated, episode-tagged).
+- Titles look like Reddit post titles (specific, emotional, episode-tagged) — not labels like "Discussion Thread".
+- Bodies and comments: human + feeling first, then Ep/cast detail. Uneven length. React to each other. No chatbot / essay filler.
 - Hot takes: exactly ${hotTakeCount} strings about DIFFERENT episodes/beats.
 - Inside each post: 1–4 comments. ≥3 posts have active discussion. ≥2 posts stay quiet (0–1 comments).
 - Authors unique across posts.
-- Vibe budget: masterpiece ≥1, solid ≥2, mid ≥2, slop ≥1. Bodies say mid/rushed/under-earned — avoid writing the word "slop".
+- Vibe budget: masterpiece ≥1, solid ≥2, mid ≥2, slop ≥1. Bodies say mid/rushed/undercooked — avoid writing the word "slop".
 - Upvotes scale with fandom size (hot posts can hit hundreds–thousands when established/obsessed).
 
 ## Engagement funnel (for judges)

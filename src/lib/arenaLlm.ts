@@ -29,7 +29,7 @@ export async function generateArenaTurnJson(system: string, user: string): Promi
           { role: 'user', content: user },
         ],
         text: { format: { type: 'json_object' } },
-        max_output_tokens: 800,
+        max_output_tokens: 1400,
       });
       const text =
         response.output_text ||
@@ -53,7 +53,7 @@ export async function generateArenaTurnJson(system: string, user: string): Promi
     ],
     response_format: { type: 'json_object' },
     ...(isGpt56Family ? {} : { temperature: 0.95 }),
-    max_tokens: 800,
+    max_tokens: 1400,
   } as any);
 
   const content = completion.choices[0]?.message?.content;
