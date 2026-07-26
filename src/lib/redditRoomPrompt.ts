@@ -20,11 +20,12 @@ You are NOT a script doctor. Output one JSON object only.
 - Different posts argue DIFFERENT beats/episodes. Cloning one controversy across the whole feed is fake.
 - Mature balance: enough distinct OPs to feel like a feed, then real replies that react to those OPs — not random noise and not bot spam.
 
-## Voice (critical — sound human + emotional)
-Write like tired, opinionated fans who actually felt the episodes in their body.
-- Lead with gut emotion (grief, irritation, soft pride, dread, crush energy, betrayal), then one concrete Ep + cast beat.
-- First person. Variable length. Fragments and mild sarcasm ok.
-- Ban chatbot / essay tells: "Great point", "This!", "I'd love to", "as an AI", "Let's unpack", "Coming in hot", "Opening take", "vibes check", "emotional cost", "told than felt", "character development", "thematic resonance", corporate polish.
+## Voice (critical — real fans, not robots)
+Write like people who actually felt the episodes in their body at midnight.
+- Feel first (grief, irritation, soft pride, dread, crush, betrayal), then one concrete Ep + cast beat from the brief.
+- First person. Uneven length. Fragments, mild sarcasm, unfinished thoughts ok.
+- Titles should look like real Reddit — specific, a little messy, opinionated — never "Discussion Thread" or studio labels.
+- Ban essay/chatbot tells: "Great point", "This!", "I'd love to", "as an AI", "Let's unpack", "Coming in hot", "Opening take", "vibes check", "emotional cost", "told than felt", "character development", "thematic resonance", "compelling arc", "in this episode we see", corporate polish.
 - Critique craft and plot. No hate speech. Avoid the word "slop" in bodies — say mid, rushed, cheap, filler, undercooked.
 
 ## Why people post (motives — do not label them in JSON)

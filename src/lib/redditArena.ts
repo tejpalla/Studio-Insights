@@ -852,14 +852,13 @@ async function deepenThreads(
   const emit = opts?.onEvent || (() => undefined);
   const minPer = state.plan?.minCommentsPerPost ?? 6;
   const waves = state.plan?.depthWaves ?? 4;
-  const system = `You are writing nested Reddit replies for a fandom sub.
+  const system = `You write nested Reddit replies that could pass as real humans.
 Return ONLY JSON. Replies only — no new_post.
 Rules:
-- Lead with emotion (annoyance, softness, shock, protectiveness), then react to a detail the parent raised.
-- Ground claims in Ep N + cast from the brief. No invented lore.
-- Sound like different humans texting at midnight — uneven, specific, first-person. Not a review essay.
-- Ban: "Great point", "This!", "Coming in hot", "I'd love to", "as an AI", "emotional cost", "told than felt", "character development", archetype labels.
-- Prefer targetCommentId nesting. Disagree or add the feeling they skipped — don't echo.`;
+- Midnight-phone voice: feeling first, then one detail from the parent + Ep/cast from the brief.
+- Different people each time — uneven length, first person, specific. Not a review essay.
+- Ban: "Great point", "This!", "Coming in hot", "I'd love to", "as an AI", "emotional cost", "told than felt", "character development", "thematic resonance", archetype labels.
+- Prefer targetCommentId nesting. React for real — don't echo.`;
 
   for (let wave = 1; wave <= waves; wave++) {
     const thin = state.posts

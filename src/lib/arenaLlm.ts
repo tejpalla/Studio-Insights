@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 function getArenaModel(): string {
-  return (process.env.OPENAI_ARENA_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6').trim();
+  return (process.env.OPENAI_ARENA_MODEL || process.env.OPENAI_MODEL || 'gpt-5.4-pro').trim();
 }
 
 function getClient() {
@@ -14,22 +14,39 @@ function getClient() {
   return new OpenAI({ apiKey });
 }
 
+/** GPT-5.x / o-series: use Responses API + reasoning. */
+function usesResponsesReasoning(model: string): boolean {
+  return /^gpt-5/i.test(model) || /^o[1-9]/i.test(model);
+}
+
+function getArenaReasoningEffort(): 'low' | 'medium' | 'high' | 'xhigh' {
+  const v = (
+    process.env.OPENAI_ARENA_REASONING_EFFORT ||
+    process.env.OPENAI_REASONING_EFFORT ||
+    'high'
+  )
+    .trim()
+    .toLowerCase();
+  if (v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh') return v;
+  return 'high';
+}
+
 export async function generateArenaTurnJson(system: string, user: string): Promise<string> {
   const openai = getClient();
   const model = getArenaModel();
-  const isGpt56Family = /^gpt-5\.6/i.test(model) || /^gpt-5(?!\.\d)/i.test(model);
+  const reasoning = usesResponsesReasoning(model);
 
-  if (isGpt56Family && typeof (openai as any).responses?.create === 'function') {
+  if (reasoning && typeof (openai as any).responses?.create === 'function') {
     try {
       const response = await (openai as any).responses.create({
         model,
-        reasoning: { effort: 'low' },
+        reasoning: { effort: getArenaReasoningEffort() },
         input: [
           { role: 'system', content: system },
           { role: 'user', content: user },
         ],
         text: { format: { type: 'json_object' } },
-        max_output_tokens: 1400,
+        max_output_tokens: 1800,
       });
       const text =
         response.output_text ||
@@ -52,8 +69,8 @@ export async function generateArenaTurnJson(system: string, user: string): Promi
       { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    ...(isGpt56Family ? {} : { temperature: 0.95 }),
-    max_tokens: 1400,
+    ...(reasoning ? {} : { temperature: 0.92 }),
+    max_tokens: 1800,
   } as any);
 
   const content = completion.choices[0]?.message?.content;
