@@ -69,8 +69,9 @@ export async function generateArenaTurnJson(system: string, user: string): Promi
       { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    ...(reasoning ? {} : { temperature: 0.92 }),
-    max_tokens: 1800,
+    ...(reasoning
+      ? { max_completion_tokens: 1800 }
+      : { temperature: 0.92, max_tokens: 1800 }),
   } as any);
 
   const content = completion.choices[0]?.message?.content;

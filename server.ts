@@ -139,8 +139,9 @@ async function generateRoomJson(system: string, user: string): Promise<string> {
       { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    ...(reasoning ? {} : { temperature: 0.85 }),
-    max_tokens: 16000,
+    ...(reasoning
+      ? { max_completion_tokens: 16000 }
+      : { temperature: 0.85, max_tokens: 16000 }),
   } as any);
 
   const content = completion.choices[0]?.message?.content;
