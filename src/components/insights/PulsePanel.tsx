@@ -65,7 +65,7 @@ export const PulsePanel: React.FC<{ result: InsightsResult }> = ({ result }) => 
       <section className="border border-line rounded-xl bg-white p-5 space-y-3">
         <h3 className="text-sm font-semibold text-ink">Visible vibe split (commenters only)</h3>
         <p className="text-[11px] text-ink-muted">
-          These bars are the loud 10% — lurkers never show up here (90-9-1).
+          Bars from this run’s posts/comments only — quiet agents never appear here.
         </p>
         {(
           [
@@ -161,39 +161,43 @@ function EngagementCard({ eng }: { eng: EngagementFunnel }) {
       <div className="space-y-1">
         <h3 className="text-sm font-semibold text-ink">Who engages vs who leaves</h3>
         <p className="text-[11px] text-ink-muted leading-relaxed">{eng.researchNote}</p>
+        <p className="text-[10px] text-ink-muted">
+          Lurk / occasional / heavy = this cast’s real actions. Finish–pause–leave = inferred from
+          vibes + pacing posts. Audience / online = story-size estimate × run heat (not scraped Reddit).
+        </p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-        <Metric label="Lurk" value={`${Math.round(eng.lurkersPct)}%`} hint="read only" />
-        <Metric label="Occasional" value={`${Math.round(eng.occasionalPct)}%`} hint="light posts" />
-        <Metric label="Heavy" value={`${Math.round(eng.heavyPostersPct)}%`} hint="most posts" />
+        <Metric label="Quiet this run" value={`${Math.round(eng.lurkersPct)}%`} hint="no post/reply" />
+        <Metric label="Light" value={`${Math.round(eng.occasionalPct)}%`} hint="1–2 takes" />
+        <Metric label="Heavy" value={`${Math.round(eng.heavyPostersPct)}%`} hint="posted a lot" />
         <Metric
-          label="Online"
+          label="Est. online"
           value={`${(eng.onlineNow || 0).toLocaleString()}`}
-          hint={`${eng.postsPerDay || '—'} posts/day`}
+          hint={`${eng.postsPerDay || '—'} posts this run`}
         />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
         <Metric label="Depth" value={`${eng.depthScore ?? '—'}`} hint={eng.fandomMaturity || 'fandom'} />
-        <Metric label="Controversy" value={`${eng.controversyIndex ?? '—'}`} hint="index" />
-        <Metric label="Binge pull" value={`${eng.bingeCommitment ?? '—'}`} hint="commitment" />
+        <Metric label="Controversy" value={`${eng.controversyIndex ?? '—'}`} hint="from this feed" />
+        <Metric label="Binge pull" value={`${eng.bingeCommitment ?? '—'}`} hint="from finish signal" />
         <Metric
-          label="Comments/day"
+          label="Comments this run"
           value={`${(eng.commentsPerDay || 0).toLocaleString()}`}
-          hint="activity"
+          hint="arena total"
         />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
         <div className="rounded-lg bg-paper-2 border border-line p-3">
-          <div className="text-xs text-ink-muted">Estimated viewers</div>
+          <div className="text-xs text-ink-muted">Est. viewers (scaled)</div>
           <div className="text-lg font-semibold text-ink">
             {(eng.estimatedViewers || 0).toLocaleString()}
           </div>
         </div>
         <div className="rounded-lg bg-paper-2 border border-line p-3">
-          <div className="text-xs text-ink-muted">Estimated commenters</div>
+          <div className="text-xs text-ink-muted">Est. commenters (scaled)</div>
           <div className="text-lg font-semibold text-ink">
             {(eng.estimatedCommenters || 0).toLocaleString()}
           </div>
@@ -202,9 +206,9 @@ function EngagementCard({ eng }: { eng: EngagementFunnel }) {
 
       <div className="space-y-2">
         <div className="flex justify-between text-xs text-ink-muted">
-          <span>Finish</span>
-          <span>Pause</span>
-          <span>Leave</span>
+          <span>Would finish</span>
+          <span>Would pause</span>
+          <span>Would leave</span>
         </div>
         <div className="h-3 rounded-full overflow-hidden flex bg-paper-2">
           <div className="bg-emerald-500" style={{ width: `${finish}%` }} title="Finish" />
@@ -224,7 +228,7 @@ function EngagementCard({ eng }: { eng: EngagementFunnel }) {
             <li key={i} className="text-sm border border-line rounded-lg p-3 bg-paper-2/50">
               <div className="flex justify-between gap-2 text-xs text-ink-muted">
                 <span>{r.episodeHint}</span>
-                <span>{r.sharePct}% of leavers</span>
+                <span>{r.sharePct}% of leave signal</span>
               </div>
               <p className="text-ink mt-1">{r.reason}</p>
             </li>

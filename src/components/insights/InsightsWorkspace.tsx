@@ -1,5 +1,5 @@
 import React from 'react';
-import { InsightsResult, InsightsSection, StoryScript } from '../../types';
+import { ArenaSpawnConfig, InsightsResult, InsightsSection, StoryScript } from '../../types';
 import { ThreadPanel } from './ThreadPanel';
 import { PulsePanel } from './PulsePanel';
 import { CutPanel } from './CutPanel';
@@ -19,6 +19,7 @@ interface InsightsWorkspaceProps {
   isStale?: boolean;
   arenaLines?: ArenaTickerLine[];
   arenaLive?: boolean;
+  arenaConfig?: ArenaSpawnConfig;
 }
 
 const SECTIONS: { id: InsightsSection; label: string }[] = [
@@ -41,8 +42,12 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
   isStale,
   arenaLines = [],
   arenaLive,
+  arenaConfig,
 }) => {
   const showTicker = arenaLive || arenaLines.length > 0 || Boolean(result?.arena);
+  const liveAgents = result?.arena?.agentCount ?? arenaConfig?.agentCount;
+  const liveRounds = result?.arena?.rounds ?? arenaConfig?.rounds;
+  const liveActive = arenaConfig?.activePerRound;
 
   return (
     <div className="max-w-3xl mx-auto px-5 py-8 space-y-6">
@@ -83,8 +88,9 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
           }
           isLive={arenaLive}
           runId={result?.arena?.runId}
-          agentCount={result?.arena?.agentCount ?? 8}
-          rounds={result?.arena?.rounds ?? 3}
+          agentCount={liveAgents}
+          rounds={liveRounds}
+          activePerRound={liveActive}
         />
       )}
 

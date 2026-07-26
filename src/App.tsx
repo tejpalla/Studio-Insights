@@ -281,6 +281,7 @@ export default function App() {
             isStale={isStale}
             arenaLines={arenaLines}
             arenaLive={arenaLive}
+            arenaConfig={arenaConfig}
             onRerunArena={runArena}
             onRerun={() =>
               insights?.arena
