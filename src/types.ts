@@ -229,3 +229,12 @@ export interface InsightsResult {
 
 export type AppView = 'home' | 'series' | 'insights';
 export type InsightsSection = 'thread' | 'pulse' | 'cut' | 'map';
+
+/** Configurable arena spawn (Series UI → /api/arena/*) */
+export interface ArenaSpawnConfig {
+  agentCount: number;
+  rounds: number;
+  /** How many agents take a full LLM turn each round (rest sit out that round) */
+  activePerRound: number;
+  syncDatabricks?: boolean;
+}

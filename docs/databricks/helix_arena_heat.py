@@ -8,9 +8,29 @@ from sklearn.cluster import KMeans
 CATALOG = "workspace"
 SCHEMA = "default"
 VOLUME = "helix_arena"
-RUN_ID = "REPLACE_WITH_RUN_ID"
+RUN_ID = "run_1785041677766_9944"  # change to your synced run folder name
 
 BASE = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}/helix-arena/{RUN_ID}"
+
+
+def normalize_comments(df):
+    """Helix JSON uses camelCase (postId); CSV may use post_id. Unify to snake_case."""
+    cols = set(df.columns)
+    if "post_id" not in cols and "postId" in cols:
+        df = df.withColumnRenamed("postId", "post_id")
+    if "comment_id" not in cols and "id" in cols:
+        df = df.withColumnRenamed("id", "comment_id")
+    return df
+
+
+def normalize_posts(df):
+    cols = set(df.columns)
+    if "post_id" not in cols and "id" in cols:
+        df = df.withColumnRenamed("id", "post_id")
+    if "about_episode" not in cols and "aboutEpisode" in cols:
+        df = df.withColumnRenamed("aboutEpisode", "about_episode")
+    return df
+
 
 try:
     posts = spark.read.option("multiLine", True).json(f"{BASE}/posts.json")
@@ -23,7 +43,11 @@ except Exception:
     agents = spark.createDataFrame([], "agent_id STRING")
     events = spark.createDataFrame([], "event_type STRING")
 
+posts = normalize_posts(posts)
+comments = normalize_comments(comments)
+
 print("posts", posts.count(), "comments", comments.count())
+print("comment columns:", comments.columns)
 
 posts.write.mode("overwrite").saveAsTable(f"{CATALOG}.{SCHEMA}.helix_arena_posts")
 comments.write.mode("overwrite").saveAsTable(f"{CATALOG}.{SCHEMA}.helix_arena_comments")

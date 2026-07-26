@@ -11,7 +11,6 @@ import {
 } from './src/lib/redditRoomPrompt.ts';
 import { buildEngagementFunnel } from './src/lib/normalizeInsights.ts';
 import {
-  ARENA_ROUNDS,
   arenaEventsToJsonl,
   arenaToInsightsPayload,
   createArena,
@@ -976,7 +975,7 @@ app.post('/api/insights', async (req, res) => {
 /** Phase 2: multi-agent Reddit arena (batch result). */
 app.post('/api/arena/run', async (req, res) => {
   try {
-    const { title, genre, episodes, seriesId, syncDatabricks } = req.body;
+    const { title, genre, episodes, seriesId, syncDatabricks, arenaConfig } = req.body;
     if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
       return res.status(400).json({ error: 'At least one episode script is required.' });
     }
@@ -984,9 +983,11 @@ app.post('/api/arena/run', async (req, res) => {
       return res.status(503).json({ error: 'OPENAI_API_KEY missing.' });
     }
 
-    console.log(`Arena run: ${getArenaModel()} · ${ARENA_ROUNDS} rounds`);
-    const state = createArena({ title, genre, episodes });
-    await runArena(state, generateAgentJson, { rounds: ARENA_ROUNDS });
+    const state = createArena({ title, genre, episodes, config: arenaConfig });
+    console.log(
+      `Arena run: ${getArenaModel()} · ${state.agents.length} agents · ${state.plan.rounds} rounds · ${state.plan.activePerRound} active/round`
+    );
+    await runArena(state, generateAgentJson);
 
     const payload = arenaToInsightsPayload(state, {
       seriesId: seriesId || state.runId,
@@ -1016,7 +1017,7 @@ app.post('/api/arena/run', async (req, res) => {
 /** Phase 2: SSE spectator stream — events then final insights payload. */
 app.post('/api/arena/stream', async (req, res) => {
   try {
-    const { title, genre, episodes, seriesId, syncDatabricks } = req.body;
+    const { title, genre, episodes, seriesId, syncDatabricks, arenaConfig } = req.body;
     if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
       return res.status(400).json({ error: 'At least one episode script is required.' });
     }
@@ -1033,11 +1034,12 @@ app.post('/api/arena/stream', async (req, res) => {
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    console.log(`Arena stream: ${getArenaModel()} · ${ARENA_ROUNDS} rounds`);
-    const state = createArena({ title, genre, episodes });
+    const state = createArena({ title, genre, episodes, config: arenaConfig });
+    console.log(
+      `Arena stream: ${getArenaModel()} · ${state.agents.length} agents · ${state.plan.rounds} rounds · ${state.plan.activePerRound} active/round`
+    );
 
     await runArena(state, generateAgentJson, {
-      rounds: ARENA_ROUNDS,
       onEvent: (ev) => send({ kind: 'event', event: ev }),
     });
 

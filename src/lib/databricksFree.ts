@@ -52,12 +52,12 @@ export function writeArenaExportPack(pack: ArenaExportPack): string {
     ...pack.posts.map((p: any) =>
       [
         pack.runId,
-        p.id,
+        p.post_id ?? p.id,
         p.kind,
         csv(p.title),
         p.author,
         p.vibe,
-        p.aboutEpisode ?? '',
+        p.about_episode ?? p.aboutEpisode ?? '',
         p.upvotes ?? 0,
         csv(p.body),
       ].join(',')
@@ -68,8 +68,8 @@ export function writeArenaExportPack(pack: ArenaExportPack): string {
     ...pack.comments.map((c: any) =>
       [
         pack.runId,
-        c.id,
-        c.postId,
+        c.comment_id ?? c.id,
+        c.post_id ?? c.postId,
         c.author,
         c.vibe || '',
         c.upvotes ?? 0,
@@ -205,8 +205,8 @@ export function buildArenaExportPack(state: {
   for (const p of state.posts) {
     for (const c of p.comments || []) {
       comments.push({
-        id: c.id,
-        postId: p.id,
+        comment_id: c.id,
+        post_id: p.id,
         author: c.username,
         vibe: c.vibe,
         upvotes: c.upvotes,
@@ -215,8 +215,8 @@ export function buildArenaExportPack(state: {
       });
       for (const r of c.replies || []) {
         comments.push({
-          id: r.id,
-          postId: p.id,
+          comment_id: r.id,
+          post_id: p.id,
           author: r.username,
           vibe: '',
           upvotes: r.upvotes,
@@ -254,13 +254,13 @@ export function buildArenaExportPack(state: {
       vibe_bias: a.bias,
     })),
     posts: state.posts.map((p) => ({
-      id: p.id,
+      post_id: p.id,
       kind: p.kind,
       title: p.title,
       author: p.author,
       body: p.body,
       vibe: p.vibe,
-      aboutEpisode: p.aboutEpisode,
+      about_episode: p.aboutEpisode,
       upvotes: p.upvotes,
     })),
     comments,

@@ -14,10 +14,24 @@ import { buildRoomBrief } from './redditRoomPrompt';
 import { extractStructureFromEpisodes } from './scriptGrounding';
 import { scaleFandomFromStory } from './fandomScale';
 
-export const ARENA_AGENT_COUNT = 8;
-export const ARENA_ROUNDS = 3;
+export const ARENA_AGENT_MIN = 8;
+export const ARENA_AGENT_MAX = 45;
+export const ARENA_ROUNDS_MIN = 2;
+export const ARENA_ROUNDS_MAX = 8;
+/** @deprecated defaults — prefer spawn config */
+export const ARENA_AGENT_COUNT = 16;
+export const ARENA_ROUNDS = 4;
 
 export type ArenaActionType = 'new_post' | 'reply' | 'upvote' | 'lurk';
+
+export interface ArenaSpawnPlan {
+  agentCount: number;
+  rounds: number;
+  activePerRound: number;
+  /** Depth target — independent of agent count (comments per post, approx) */
+  minCommentsPerPost: number;
+  depthWaves: number;
+}
 
 export interface ArenaAgent {
   id: string;
@@ -42,7 +56,14 @@ export interface ArenaAction {
 }
 
 export interface ArenaEvent {
-  type: 'agent_spawned' | 'action' | 'round_start' | 'round_end' | 'complete' | 'error';
+  type:
+    | 'agent_spawned'
+    | 'action'
+    | 'round_start'
+    | 'round_end'
+    | 'depth_wave'
+    | 'complete'
+    | 'error';
   ts: number;
   round?: number;
   agentId?: string;
@@ -64,6 +85,7 @@ export interface SubState {
   epCount: number;
   castNames: string[];
   seed: number;
+  plan: ArenaSpawnPlan;
 }
 
 export type JsonGenerator = (system: string, user: string) => Promise<string>;
@@ -153,18 +175,49 @@ function pickName(pool: string[], used: Set<string>, seed: number, i: number): s
   return fallback;
 }
 
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, Math.round(n)));
+}
+
+export function resolveSpawnPlan(config?: {
+  agentCount?: number;
+  rounds?: number;
+  activePerRound?: number;
+}): ArenaSpawnPlan {
+  const agentCount = clamp(config?.agentCount ?? ARENA_AGENT_COUNT, ARENA_AGENT_MIN, ARENA_AGENT_MAX);
+  const rounds = clamp(config?.rounds ?? ARENA_ROUNDS, ARENA_ROUNDS_MIN, ARENA_ROUNDS_MAX);
+  const activePerRound = clamp(
+    config?.activePerRound ?? Math.min(14, agentCount),
+    4,
+    agentCount
+  );
+  // Depth stays fixed regardless of cast size (8 vs 45 agents)
+  const minCommentsPerPost = 8;
+  const depthWaves = 6;
+  return { agentCount, rounds, activePerRound, minCommentsPerPost, depthWaves };
+}
+
 export function createArena(opts: {
   title: string;
   genre?: string;
   episodes: Array<{ episodeNumber?: number; title?: string; scriptText?: string }>;
   agentCount?: number;
+  config?: {
+    agentCount?: number;
+    rounds?: number;
+    activePerRound?: number;
+  };
 }): SubState {
   const seed = Math.floor(Math.random() * 9000 + 1000);
   const episodes = opts.episodes || [];
   const grounding = extractStructureFromEpisodes(episodes);
   const brief = buildRoomBrief(episodes);
-  const scale = scaleFandomFromStory(episodes.length, grounding.characters.length);
-  const n = Math.min(ARENA_AGENT_COUNT, opts.agentCount || ARENA_AGENT_COUNT);
+  const plan = resolveSpawnPlan({
+    agentCount: opts.config?.agentCount ?? opts.agentCount,
+    rounds: opts.config?.rounds,
+    activePerRound: opts.config?.activePerRound,
+  });
+  const n = plan.agentCount;
   const used = new Set<string>();
   const agents: ArenaAgent[] = [];
 
@@ -197,7 +250,7 @@ export function createArena(opts: {
     runId: `run_${Date.now()}_${seed}`,
     title: opts.title || 'Untitled',
     subreddit: `r/${slug}Arena`,
-    tagline: `${opts.title || 'Series'} — ${agents.length} bots, open arena`,
+    tagline: `${opts.title || 'Series'} — ${agents.length} bots · ${plan.rounds} rounds`,
     posts: [],
     agents,
     events,
@@ -205,6 +258,7 @@ export function createArena(opts: {
     epCount: episodes.length,
     castNames: grounding.characters.slice(0, 16).map((c) => c.name),
     seed,
+    plan,
   };
 }
 
@@ -212,22 +266,25 @@ function feedSnapshot(state: SubState, maxPosts = 8): string {
   if (state.posts.length === 0) {
     return 'FEED EMPTY — prefer new_post this turn (especially episode_discussion / theory / pacing).';
   }
-  return state.posts
+  const ranked = [...state.posts].sort(
+    (a, b) => (a.comments?.length || 0) - (b.comments?.length || 0)
+  );
+  return ranked
     .slice(0, maxPosts)
     .map((p) => {
       const comments = (p.comments || [])
-        .slice(0, 3)
+        .slice(0, 6)
         .map((c) => {
           const replies = (c.replies || [])
-            .slice(0, 2)
-            .map((r) => `      ↳ u/${r.username}: ${r.body.slice(0, 100)}`)
+            .slice(0, 5)
+            .map((r) => `      ↳ [${r.id}] u/${r.username}: ${r.body.slice(0, 100)}`)
             .join('\n');
-          return `    - [${c.id}] u/${c.username} (${c.vibe}, ${c.upvotes}): ${c.body.slice(0, 140)}${
+          return `    - [${c.id}] u/${c.username} (${c.vibe}, ${c.upvotes}, ${c.replies?.length || 0} nested): ${c.body.slice(0, 150)}${
             replies ? `\n${replies}` : ''
           }`;
         })
         .join('\n');
-      return `[${p.id}] ${p.kind} · Ep ${p.aboutEpisode ?? '?'} · ${p.upvotes}↑ · u/${p.author}\n  TITLE: ${p.title}\n  BODY: ${(p.body || '').slice(0, 160)}\n  COMMENTS:\n${comments || '    (none)'}`;
+      return `[${p.id}] ${p.kind} · Ep ${p.aboutEpisode ?? '?'} · ${p.upvotes}↑ · u/${p.author} · ${(p.comments || []).length} comments\n  TITLE: ${p.title}\n  BODY: ${(p.body || '').slice(0, 160)}\n  COMMENTS:\n${comments || '    (none — start the thread)'}`;
     })
     .join('\n\n');
 }
@@ -238,19 +295,32 @@ Rules:
 - Stay in character (archetype + strategy).
 - Cite Ep N and/or a cast name from the brief when you post/reply.
 - Prefer disagreement / differentiation over cloning praise.
-- If feed is empty: action must be new_post.
+- DEPTH > BREADTH: once a few posts exist, strongly prefer reply (nest with targetCommentId). Do NOT spam new_post.
+- Only new_post if feed is empty OR you have a truly new angle.
 - If feed is praise-heavy: lean mid/rough critique.
-- If someone dunks your tribe unfairly: reply and push back.
-- Bodies: human, variable length, no "slop" word, no corporate AI tone.
-- action "lurk" if you have nothing sharp to add (still valid).
+- Bodies: human Gen-Z/casual Reddit voice, variable length, light meme energy ok, no "slop" word, no corporate AI tone.
+- Prefer reply over lurk when a thin thread needs depth.
 - action "upvote" needs targetPostId or targetCommentId.
-- action "reply" needs targetPostId and body (optional targetCommentId to nest).
+- action "reply" needs targetPostId and body; set targetCommentId to nest.
 - action "new_post" needs kind, title, body, vibe, aboutEpisode.`;
 
+function countPostComments(p: RedditPost): number {
+  return (p.comments || []).reduce((n, c) => n + 1 + (c.replies?.length || 0), 0);
+}
+
 function buildAgentUserPrompt(state: SubState, agent: ArenaAgent, round: number): string {
-  return `ROUND ${round}/${ARENA_ROUNDS}
+  const posts = state.posts.length;
+  const depthHint =
+    posts === 0
+      ? 'FEED EMPTY — new_post.'
+      : posts >= 4
+        ? 'DEPTH MODE — prefer reply + targetCommentId. Almost never new_post. Deepen thin threads.'
+        : 'A few posts exist — prefer reply/nest; new_post only for a fresh fight.';
+  return `ROUND ${round}/${state.plan?.rounds ?? ARENA_ROUNDS}
 SERIES: ${state.title} (${state.epCount} episodes)
 CAST: ${state.castNames.join('; ') || 'see brief'}
+BOARD: ${posts} posts · depth target ≥${state.plan?.minCommentsPerPost ?? 8} comments/post (independent of cast size)
+${depthHint}
 
 YOU ARE:
 - username: ${agent.username}
@@ -269,7 +339,7 @@ Return JSON:
 {
   "action": "new_post" | "reply" | "upvote" | "lurk",
   "targetPostId": "optional",
-  "targetCommentId": "optional",
+  "targetCommentId": "optional — nest under this comment id",
   "kind": "episode_discussion"|"theory"|"character"|"pacing"|"should_i_continue"|"reaction",
   "title": "string if new_post",
   "body": "string if new_post or reply",
@@ -304,6 +374,25 @@ function parseAction(raw: string, agent: ArenaAgent, state: SubState): ArenaActi
     };
   }
 
+  // Cast size must not flatten threads: convert extra OPs into nested replies
+  if (action === 'new_post' && state.posts.length >= 4) {
+    const thin = [...state.posts].sort((a, b) => countPostComments(a) - countPostComments(b))[0];
+    const parent = thin?.comments?.[0];
+    return {
+      action: 'reply',
+      targetPostId: thin?.id,
+      targetCommentId: parent?.id,
+      body:
+        parsed?.body ||
+        parsed?.title ||
+        `Pushing back on this — Ep ${thin?.aboutEpisode ?? '?'} still feels off.`,
+      vibe: (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(parsed?.vibe)
+        ? parsed.vibe
+        : agent.bias,
+      talksAbout: parsed?.talksAbout ? String(parsed.talksAbout) : undefined,
+    };
+  }
+
   const vibe = (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(parsed?.vibe)
     ? parsed.vibe
     : agent.bias;
@@ -325,6 +414,19 @@ function parseAction(raw: string, agent: ArenaAgent, state: SubState): ArenaActi
 function findPost(state: SubState, id?: string): RedditPost | undefined {
   if (!id) return state.posts[0];
   return state.posts.find((p) => p.id === id) || state.posts[0];
+}
+
+function pickNestCommentId(post: RedditPost): string | undefined {
+  const comments = post.comments || [];
+  if (!comments.length) return undefined;
+  const ranked = [...comments].sort((a, b) => {
+    const ar = a.replies?.length || 0;
+    const br = b.replies?.length || 0;
+    const as = ar === 0 ? 4 : ar < 8 ? 10 - ar : 1;
+    const bs = br === 0 ? 4 : br < 8 ? 10 - br : 1;
+    return bs - as || (b.upvotes || 0) - (a.upvotes || 0);
+  });
+  return ranked[0]?.id;
 }
 
 export function applyAction(
@@ -447,8 +549,14 @@ export function applyAction(
     replies: [],
   };
 
-  if (action.targetCommentId) {
-    const parent = (post.comments || []).find((c) => c.id === action.targetCommentId);
+  let nestId = action.targetCommentId;
+  if (!nestId && (post.comments?.length || 0) > 0) {
+    const preferNest = (state.seed + round + agent.id.length) % 5 !== 0; // ~80% nest
+    if (preferNest) nestId = pickNestCommentId(post);
+  }
+
+  if (nestId) {
+    const parent = (post.comments || []).find((c) => c.id === nestId);
     if (parent) {
       parent.replies = parent.replies || [];
       parent.replies.push({
@@ -472,8 +580,10 @@ export function applyAction(
     round,
     agentId: agent.id,
     username: agent.username,
-    summary: `u/${agent.username} replies on “${post.title.slice(0, 48)}”`,
-    action,
+    summary: nestId
+      ? `u/${agent.username} nests a reply on “${post.title.slice(0, 40)}”`
+      : `u/${agent.username} replies on “${post.title.slice(0, 48)}”`,
+    action: { ...action, targetCommentId: nestId || action.targetCommentId },
     postId: post.id,
   };
   state.events.push(ev);
@@ -517,7 +627,8 @@ export async function runArena(
     onEvent?: (ev: ArenaEvent) => void;
   }
 ): Promise<SubState> {
-  const rounds = opts?.rounds ?? ARENA_ROUNDS;
+  const rounds = opts?.rounds ?? state.plan?.rounds ?? ARENA_ROUNDS;
+  const activePerRound = state.plan?.activePerRound ?? state.agents.length;
   const emit = (ev: ArenaEvent) => {
     opts?.onEvent?.(ev);
   };
@@ -526,13 +637,21 @@ export async function runArena(
     emit(ev);
   }
 
-  // Shuffle order each round using seed + round
+  const castNote: ArenaEvent = {
+    type: 'round_start',
+    ts: Date.now(),
+    round: 0,
+    summary: `Cast ${state.agents.length} agents · ${rounds} rounds · ${activePerRound} active per round`,
+  };
+  state.events.push(castNote);
+  emit(castNote);
+
   for (let round = 1; round <= rounds; round++) {
     const start: ArenaEvent = {
       type: 'round_start',
       ts: Date.now(),
       round,
-      summary: `Round ${round}/${rounds} — ${state.agents.length} agents`,
+      summary: `Round ${round}/${rounds} — ${activePerRound} of ${state.agents.length} agents act`,
     };
     state.events.push(start);
     emit(start);
@@ -542,9 +661,9 @@ export async function runArena(
       const hb = (b.id.charCodeAt(b.id.length - 1) * round + state.seed) % 97;
       return ha - hb;
     });
+    const active = order.slice(0, activePerRound);
 
-    // Sequential for true emergence (each sees prior actions this round)
-    for (const agent of order) {
+    for (const agent of active) {
       const ev = await runAgentTurn(state, agent, round, generateJson);
       emit(ev);
     }
@@ -559,14 +678,114 @@ export async function runArena(
     emit(end);
   }
 
+  // Depth pass — same target whether cast is 8 or 45
+  await deepenThreads(state, generateJson, { onEvent: emit });
+
   const done: ArenaEvent = {
     type: 'complete',
     ts: Date.now(),
-    summary: `Arena complete — ${state.posts.length} posts, ${state.events.length} events`,
+    summary: `Arena complete — ${state.posts.length} posts, ${state.events.length} events, ${state.agents.length} agents`,
   };
   state.events.push(done);
   emit(done);
   return state;
+}
+
+/** Reply-only waves so agent count never starves thread depth. */
+async function deepenThreads(
+  state: SubState,
+  generateJson: JsonGenerator,
+  opts?: { onEvent?: (ev: ArenaEvent) => void }
+): Promise<void> {
+  const emit = opts?.onEvent || (() => undefined);
+  const minPer = state.plan?.minCommentsPerPost ?? 8;
+  const waves = state.plan?.depthWaves ?? 6;
+  const system = `You deepen Reddit threads with nested replies ONLY. Return JSON. DEPTH > BREADTH.
+Casual Gen-Z fandom voice. Cite Ep N / cast. Disagree. Nest with targetCommentId whenever possible.`;
+
+  for (let wave = 1; wave <= waves; wave++) {
+    const thin = state.posts
+      .map((p) => ({ p, n: countPostComments(p) }))
+      .filter((x) => x.n < minPer)
+      .sort((a, b) => a.n - b.n)
+      .slice(0, 6);
+    if (thin.length === 0 && state.posts.length > 0) break;
+    if (state.posts.length === 0) break;
+
+    const batch = 16;
+    const agentLines = state.agents
+      .map((a, i) => `${i}: u/${a.username} (${a.archetype})`)
+      .join('\n');
+    const user = `DEPTH WAVE ${wave}/${waves} (cast size does NOT change this target)
+Need ~${minPer} comments per post. Thin threads:
+${thin.map((t) => `- ${t.p.id} “${t.p.title.slice(0, 50)}” (${t.n} comments) ids=[${(t.p.comments || []).map((c) => c.id).slice(0, 4).join(',')}]`).join('\n')}
+
+AGENTS:
+${agentLines}
+
+BRIEF:
+${state.brief.slice(0, 5000)}
+
+FEED:
+${feedSnapshot(state, 6)}
+
+Return JSON: { "items": [ { "type":"reply", "authorIndex":0, "targetPostId":"...", "targetCommentId":"...", "body":"...", "vibe":"mid" } ] }
+~${batch} reply items. ≥80% must include targetCommentId.`;
+
+    try {
+      const raw = await generateJson(system, user);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+      let applied = 0;
+      for (const item of items) {
+        if (item?.type && item.type !== 'reply') continue;
+        const idx = Number(item?.authorIndex);
+        const agent =
+          state.agents[
+            Number.isFinite(idx)
+              ? clamp(Math.floor(idx), 0, state.agents.length - 1)
+              : applied % state.agents.length
+          ];
+        if (!agent) continue;
+        applyAction(
+          state,
+          agent,
+          {
+            action: 'reply',
+            targetPostId: item?.targetPostId ? String(item.targetPostId) : undefined,
+            targetCommentId: item?.targetCommentId ? String(item.targetCommentId) : undefined,
+            body: String(item?.body || '').trim() || undefined,
+            vibe: (['masterpiece', 'solid', 'mid', 'slop'] as const).includes(item?.vibe)
+              ? item.vibe
+              : agent.bias,
+          },
+          200 + wave
+        );
+        applied += 1;
+      }
+      const ev: ArenaEvent = {
+        type: 'depth_wave',
+        ts: Date.now(),
+        round: 200 + wave,
+        summary: `Depth wave ${wave}: +${applied} nested replies (depth independent of agent count)`,
+      };
+      state.events.push(ev);
+      emit(ev);
+    } catch (err: any) {
+      const ev: ArenaEvent = {
+        type: 'error',
+        ts: Date.now(),
+        summary: `Depth wave ${wave} failed: ${err?.message || 'error'}`,
+      };
+      state.events.push(ev);
+      emit(ev);
+    }
+  }
 }
 
 function flattenComments(posts: RedditPost[]): RedditComment[] {
@@ -686,7 +905,7 @@ export function arenaToInsightsPayload(
     arena: {
       runId: state.runId,
       agentCount: state.agents.length,
-      rounds: ARENA_ROUNDS,
+      rounds: state.plan?.rounds ?? ARENA_ROUNDS,
       eventCount: state.events.length,
       postCount: posts.length,
       commentCount,

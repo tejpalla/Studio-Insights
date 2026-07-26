@@ -1,12 +1,25 @@
 import React, { useState } from 'react';
 import { normalizeInsightsClient } from './lib/normalizeInsights';
-import { AppView, InsightsResult, InsightsSection, StoryScript } from './types';
+import {
+  AppView,
+  ArenaSpawnConfig,
+  InsightsResult,
+  InsightsSection,
+  StoryScript,
+} from './types';
 import { DEMO_SERIES } from './data/sampleScripts';
 import { StudioHeader } from './components/insights/StudioHeader';
 import { HomeView } from './components/insights/HomeView';
 import { SeriesView } from './components/insights/SeriesView';
 import { InsightsWorkspace } from './components/insights/InsightsWorkspace';
 import type { ArenaTickerLine } from './components/insights/ArenaTicker';
+
+const DEFAULT_ARENA_CONFIG: ArenaSpawnConfig = {
+  agentCount: 16,
+  rounds: 4,
+  activePerRound: 12,
+  syncDatabricks: true,
+};
 
 export default function App() {
   const [view, setView] = useState<AppView>('home');
@@ -19,6 +32,7 @@ export default function App() {
   const [isStale, setIsStale] = useState(false);
   const [arenaLines, setArenaLines] = useState<ArenaTickerLine[]>([]);
   const [arenaLive, setArenaLive] = useState(false);
+  const [arenaConfig, setArenaConfig] = useState<ArenaSpawnConfig>(DEFAULT_ARENA_CONFIG);
 
   const openSeries = (s: StoryScript) => {
     setScript(JSON.parse(JSON.stringify(s)));
@@ -98,6 +112,8 @@ export default function App() {
           title: script.title,
           genre: script.genre,
           episodes: script.episodes,
+          arenaConfig,
+          syncDatabricks: arenaConfig.syncDatabricks !== false,
         }),
       });
 
@@ -245,6 +261,8 @@ export default function App() {
             setScript={updateScript}
             isRunning={isRunning}
             error={error}
+            arenaConfig={arenaConfig}
+            setArenaConfig={setArenaConfig}
             onRunArena={runArena}
             onRunInsights={runInsights}
             onBackHome={() => setView('home')}
