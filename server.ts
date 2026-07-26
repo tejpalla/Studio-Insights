@@ -21,7 +21,8 @@ import {
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+// Cloud hosts (including Render) assign the listening port at runtime.
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 

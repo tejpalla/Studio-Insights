@@ -1,5 +1,6 @@
 import React from 'react';
 import { EngagementFunnel, InsightsResult, RedditComment, StoryVibe } from '../../types';
+import { buildHitPotentialSignal } from '../../lib/hitPotential';
 
 const VIBE_LABEL: Record<StoryVibe, string> = {
   masterpiece: 'Peak',
@@ -35,6 +36,7 @@ export const PulsePanel: React.FC<{ result: InsightsResult }> = ({ result }) => 
   const roomVibe = (room.roomVibe in VIBE_STYLE ? room.roomVibe : 'solid') as StoryVibe;
   const eng = room.engagement;
   const posts = room.posts || [];
+  const hitPotential = buildHitPotentialSignal(result);
 
   return (
     <div className="space-y-6">
@@ -57,6 +59,8 @@ export const PulsePanel: React.FC<{ result: InsightsResult }> = ({ result }) => 
       </section>
 
       {eng && <EngagementCard eng={eng} />}
+
+      <HitPotentialCard signal={hitPotential} />
 
       <section className="border border-line rounded-xl bg-white p-5 space-y-3">
         <h3 className="text-sm font-semibold text-ink">Visible vibe split (commenters only)</h3>
@@ -227,6 +231,55 @@ function EngagementCard({ eng }: { eng: EngagementFunnel }) {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function HitPotentialCard({ signal }: { signal: ReturnType<typeof buildHitPotentialSignal> }) {
+  return (
+    <section className="border border-violet-200 rounded-xl bg-violet-50/50 p-5 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-ink">Pre-promotion signal</h3>
+          <p className="text-[11px] text-ink-muted max-w-xl">
+            Experimental readiness signal, not a hit prediction. It uses this simulated room only; it does not
+            know real audience demand, distribution, creative, or market timing.
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-semibold text-violet-900 tabular-nums">{signal.score}</div>
+          <div className="text-[10px] uppercase tracking-wide text-violet-700">out of 100</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full border border-violet-200 bg-white px-3 py-1 font-semibold text-violet-950">
+          {signal.readiness}
+        </span>
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-900">
+          Confidence: {signal.confidence} — simulated evidence only
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-2">
+        {signal.evidence.map((item) => (
+          <div key={item.label} className="rounded-lg border border-violet-100 bg-white/80 p-3">
+            <div className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="font-medium text-ink">{item.label}</span>
+              <span className="font-semibold text-violet-900 tabular-nums">{item.value}</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-violet-100">
+              <div className="h-full rounded-full bg-violet-500" style={{ width: `${item.value}%` }} />
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="border-t border-violet-200 pt-3 text-sm text-ink">
+        <span className="font-medium">Recommended next step: </span>
+        {signal.nextStep}
+      </p>
     </section>
   );
 }
