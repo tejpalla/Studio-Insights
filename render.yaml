@@ -1,11 +1,11 @@
 services:
   - type: web
     name: helix-story-intelligence
-    runtime: node
+    runtime: docker
     region: singapore
     plan: free
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
@@ -17,3 +17,17 @@ services:
         value: gpt-5.6
       - key: OPENAI_REASONING_EFFORT
         value: high
+      - key: ARENA_ISOLATION
+        value: inline
+      - key: ARENA_USE_WORKERS
+        value: "1"
+      - key: DATABRICKS_HOST
+        sync: false
+      - key: DATABRICKS_TOKEN
+        sync: false
+      - key: DATABRICKS_CATALOG
+        value: workspace
+      - key: DATABRICKS_SCHEMA
+        value: default
+      - key: DATABRICKS_VOLUME
+        value: helix_arena

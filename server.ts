@@ -22,6 +22,9 @@ import {
   syncArenaPackToDatabricksFree,
 } from './src/lib/databricksFree.ts';
 
+import { generateArenaTurnJson } from './src/lib/arenaLlm.ts';
+import { isolationStatus } from './src/lib/agentWorkerPool.ts';
+
 dotenv.config();
 
 const app = express();
@@ -44,50 +47,7 @@ function getArenaModel(): string {
 }
 
 async function generateAgentJson(system: string, user: string): Promise<string> {
-  const openai = getOpenAIClient();
-  const model = getArenaModel();
-  const isGpt56Family = /^gpt-5\.6/i.test(model) || /^gpt-5(?!\.\d)/i.test(model);
-
-  if (isGpt56Family && typeof (openai as any).responses?.create === 'function') {
-    try {
-      const response = await (openai as any).responses.create({
-        model,
-        reasoning: { effort: 'low' },
-        input: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        text: { format: { type: 'json_object' } },
-        max_output_tokens: 800,
-      });
-      const text =
-        response.output_text ||
-        response.output
-          ?.flatMap((item: any) => item?.content || [])
-          ?.filter((c: any) => c?.type === 'output_text' || c?.text)
-          ?.map((c: any) => c.text || c.output_text || '')
-          ?.join('') ||
-        '';
-      if (text?.trim()) return text;
-    } catch (err: any) {
-      console.warn('Arena Responses API failed, chat fallback:', err?.message || err);
-    }
-  }
-
-  const completion = await openai.chat.completions.create({
-    model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-    response_format: { type: 'json_object' },
-    ...(isGpt56Family ? {} : { temperature: 0.95 }),
-    max_tokens: 800,
-  } as any);
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) throw new Error('Agent returned empty response.');
-  return content;
+  return generateArenaTurnJson(system, user);
 }
 
 function persistArenaRun(runId: string, jsonl: string, payload: unknown) {
@@ -1160,6 +1120,7 @@ app.get('/api/health', (req, res) => {
     arenaModel: getArenaModel(),
     reasoningEffort: getReasoningEffort(),
     databricksConfigured: isDatabricksConfigured(),
+    agentIsolation: isolationStatus(),
     timestamp: new Date().toISOString(),
   });
 });

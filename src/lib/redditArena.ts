@@ -13,6 +13,8 @@ import type {
 import { buildRoomBrief } from './redditRoomPrompt';
 import { extractStructureFromEpisodes } from './scriptGrounding';
 import { scaleFandomFromStory } from './fandomScale';
+import { AGENT_TURN_SYSTEM } from './agentProtocol';
+import { dispatchIsolatedTurn, isolationStatus } from './agentWorkerPool';
 
 export const ARENA_AGENT_MIN = 8;
 export const ARENA_AGENT_MAX = 45;
@@ -289,20 +291,7 @@ function feedSnapshot(state: SubState, maxPosts = 8): string {
     .join('\n\n');
 }
 
-const AGENT_SYSTEM = `You are ONE Reddit user in a multi-agent fandom sub simulation.
-You take exactly ONE action per turn. Return ONLY JSON.
-Rules:
-- Stay in character (archetype + strategy).
-- Cite Ep N and/or a cast name from the brief when you post/reply.
-- Prefer disagreement / differentiation over cloning praise.
-- DEPTH > BREADTH: once a few posts exist, strongly prefer reply (nest with targetCommentId). Do NOT spam new_post.
-- Only new_post if feed is empty OR you have a truly new angle.
-- If feed is praise-heavy: lean mid/rough critique.
-- Bodies: human Gen-Z/casual Reddit voice, variable length, light meme energy ok, no "slop" word, no corporate AI tone.
-- Prefer reply over lurk when a thin thread needs depth.
-- action "upvote" needs targetPostId or targetCommentId.
-- action "reply" needs targetPostId and body; set targetCommentId to nest.
-- action "new_post" needs kind, title, body, vibe, aboutEpisode.`;
+const AGENT_SYSTEM = AGENT_TURN_SYSTEM;
 
 function countPostComments(p: RedditPost): number {
   return (p.comments || []).reduce((n, c) => n + 1 + (c.replies?.length || 0), 0);
@@ -597,10 +586,33 @@ export async function runAgentTurn(
   generateJson: JsonGenerator
 ): Promise<ArenaEvent> {
   try {
-    const raw = await generateJson(
-      AGENT_SYSTEM,
-      buildAgentUserPrompt(state, agent, round)
-    );
+    const system = AGENT_SYSTEM;
+    const user = buildAgentUserPrompt(state, agent, round);
+    // Prefer isolated dispatcher (worker / HTTP container / inline with one-persona context)
+    let raw: string;
+    try {
+      const turn = await dispatchIsolatedTurn({
+        requestId: `${state.runId}_${agent.id}_r${round}_${Date.now()}`,
+        round,
+        agent: {
+          id: agent.id,
+          username: agent.username,
+          archetype: agent.archetype,
+          strategy: agent.strategy,
+          flair: agent.flair,
+          bias: agent.bias,
+        },
+        system,
+        user,
+      });
+      if (!turn.ok || !turn.rawJson) {
+        throw new Error(turn.error || 'isolated turn failed');
+      }
+      raw = turn.rawJson;
+    } catch {
+      // Fallback to caller-provided generator (orchestrator)
+      raw = await generateJson(system, user);
+    }
     const action = parseAction(raw, agent, state);
     return applyAction(state, agent, action, round);
   } catch (err: any) {
@@ -637,11 +649,12 @@ export async function runArena(
     emit(ev);
   }
 
+  const iso = isolationStatus();
   const castNote: ArenaEvent = {
     type: 'round_start',
     ts: Date.now(),
     round: 0,
-    summary: `Cast ${state.agents.length} agents · ${rounds} rounds · ${activePerRound} active per round`,
+    summary: `Cast ${state.agents.length} isolated agents · ${rounds} rounds · ${activePerRound} active/round · isolation=${iso.mode}${iso.agentUrls.length ? ` · ${iso.agentUrls.length} HTTP agents` : ''}`,
   };
   state.events.push(castNote);
   emit(castNote);

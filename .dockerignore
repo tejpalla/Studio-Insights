@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.env
+.env.*
+!.env.example
+data/arena-runs/*
+!data/arena-runs/.gitkeep
+*.md
+!docs/**
+coverage
+build
+.DS_Store
+*.log

@@ -1,0 +1,48 @@
+# Local multi-container arena: orchestrator + N isolated agent containers
+# Usage:
+#   docker compose -f docker-compose.arena.yml up --build --scale agent=8
+# Then open http://localhost:3000 and Run arena.
+# Orchestrator fans turns to http://agent:4101 (Compose DNS load-balances replicas).
+
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_ARENA_MODEL: ${OPENAI_ARENA_MODEL:-}
+      ARENA_ISOLATION: http
+      ARENA_AGENT_URLS: http://agent:4101
+      DATABRICKS_HOST: ${DATABRICKS_HOST:-}
+      DATABRICKS_TOKEN: ${DATABRICKS_TOKEN:-}
+      DATABRICKS_CATALOG: ${DATABRICKS_CATALOG:-workspace}
+      DATABRICKS_SCHEMA: ${DATABRICKS_SCHEMA:-default}
+      DATABRICKS_VOLUME: ${DATABRICKS_VOLUME:-helix_arena}
+    depends_on:
+      agent:
+        condition: service_started
+    volumes:
+      - arena_data:/app/data/arena-runs
+
+  agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_ARENA_MODEL: ${OPENAI_ARENA_MODEL:-}
+      AGENT_PORT: "4101"
+      AGENT_NAME: helix-agent
+    # Scale: docker compose -f docker-compose.arena.yml up --scale agent=8
+    expose:
+      - "4101"
+
+volumes:
+  arena_data:

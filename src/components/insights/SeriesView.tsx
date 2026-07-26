@@ -91,7 +91,8 @@ export const SeriesView: React.FC<SeriesViewProps> = ({
             className="block w-full font-display text-3xl bg-transparent border-0 border-b border-transparent focus:border-line focus:outline-none text-ink"
           />
           <p className="text-sm text-ink-muted">
-            {script.genre} · {script.episodes.length} episodes · spawn {arenaConfig.agentCount} bots
+            {script.genre} · {script.episodes.length} episodes ·{' '}
+            <span className="text-ink font-medium">{arenaConfig.agentCount} agents</span> configured
             below
           </p>
         </div>
@@ -131,13 +132,20 @@ export const SeriesView: React.FC<SeriesViewProps> = ({
         </div>
       )}
 
-      <section className="border border-line rounded-xl bg-white/80 p-4 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Agent spawn</h2>
-          <p className="text-xs text-ink-muted">
-            Cast size (8–45) only. Discussion depth is separate — reply-first + depth waves stay the
-            same whether you pick 8 or 30 agents.
-          </p>
+      <section
+        id="agent-spawn"
+        className="border-2 border-[#ff4500]/40 rounded-xl bg-white p-4 sm:p-5 space-y-4 shadow-sm"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-ink">Agent spawn</h2>
+            <p className="text-xs text-ink-muted mt-0.5">
+              Pick cast size (8–45). Depth stays reply-first whether you choose 8 or 30.
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-[#ff4500] bg-orange-50 border border-orange-200 px-2 py-1 rounded">
+            {arenaConfig.agentCount} agents · {arenaConfig.rounds} rounds
+          </span>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -147,10 +155,10 @@ export const SeriesView: React.FC<SeriesViewProps> = ({
               type="button"
               disabled={isRunning}
               onClick={() => setAgents(n)}
-              className={`px-3 py-1.5 text-xs rounded-full border ${
+              className={`min-w-[2.75rem] px-3 py-2 text-sm font-medium rounded-full border transition-colors ${
                 arenaConfig.agentCount === n
                   ? 'bg-[#ff4500] text-white border-[#ff4500]'
-                  : 'border-line text-ink-muted hover:bg-paper-2'
+                  : 'border-line text-ink hover:bg-paper-2'
               }`}
             >
               {n}
@@ -199,6 +207,7 @@ export const SeriesView: React.FC<SeriesViewProps> = ({
       </section>
 
       <div className="space-y-4">
+        <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide">Episodes</h2>
         {script.episodes.map((ep, idx) => (
           <article key={ep.id} className="border border-line rounded-xl bg-white/80 p-4 space-y-3">
             <div className="flex items-center gap-3">
