@@ -92,71 +92,145 @@ export interface SubState {
 
 export type JsonGenerator = (system: string, user: string) => Promise<string>;
 
-const ARCHETYPES: Array<Omit<ArenaAgent, 'id' | 'username'> & { namePool: string[] }> = [
+const ARCHETYPES: Array<{
+  archetype: string;
+  bias: StoryVibe;
+  flairs: string[];
+  strategies: string[];
+  namePool: string[];
+}> = [
   {
     archetype: 'lore_nerd',
-    strategy:
-      'Get quietly obsessed. When timelines click, show that little thrill — then point at the Ep/cast tip from the brief. Correct people without sounding like a textbook.',
-    flair: 'lore first',
     bias: 'solid',
-    namePool: ['FogArchivist', 'NotebookMargin', 'CanonThread', 'GrayFogIndex'],
+    flairs: ['lore first', 'canon cop', 'timeline enjoyer', 'notes app open'],
+    strategies: [
+      'Quietly obsessed — when a timeline clicks, celebrate it, then point at the Ep tip.',
+      'Catch people mixing up who said what. Soft flex, not textbook.',
+      'Connect early foreshadowing to a later Ep without sounding like a wiki.',
+    ],
+    namePool: [
+      'FogArchivist', 'NotebookMargin', 'CanonThread', 'GrayFogIndex', 'MarginScribble',
+      'LoreReceipts', 'PageDogEar', 'WhisperIndex', 'RedStringBoard', 'EpStickyNote',
+    ],
   },
   {
     archetype: 'pacing_hater',
-    strategy:
-      'Irritated, restless energy. Name the Ep stretch that made you check the clock. Vent like a friend, not a critic template.',
-    flair: 'skip button ready',
     bias: 'slop',
-    namePool: ['SkipToTwist', 'PacingKnife', 'MidArcExit', 'FillerDetector'],
+    flairs: ['skip button ready', 'mid-arc exit', 'clockwatcher', 'filler radar'],
+    strategies: [
+      'Restless — name the stretch that made you check the clock.',
+      'Vent about stalls like texting a friend, not writing a review.',
+      'Call out repetition with a specific Ep range and zero polish.',
+    ],
+    namePool: [
+      'SkipToTwist', 'PacingKnife', 'MidArcExit', 'FillerDetector', 'SpeedRunPast',
+      'WaitForPlot', 'StallAlarm', 'ChapterDrag', 'FastForwardFan', 'DeadAirEp',
+    ],
   },
   {
     archetype: 'craft_defender',
-    strategy:
-      'Protect moments that actually hit you. When someone dunks lazily, get a little defensive — name the line/beat that still sits in your chest.',
-    flair: 'audio craft',
     bias: 'masterpiece',
-    namePool: ['SoundstageFan', 'EarnItOrDont', 'CraftOverLore', 'MicDropEp'],
+    flairs: ['audio craft', 'earn it', 'line that hit', 'structure stan'],
+    strategies: [
+      'Protect moments that actually hit — get defensive when dunks feel lazy.',
+      'Name the line/beat that still sits in your chest.',
+      'Steelman craft when the feed is piled on mid/slop takes.',
+    ],
+    namePool: [
+      'SoundstageFan', 'EarnItOrDont', 'CraftOverLore', 'MicDropEp', 'StageLeftTear',
+      'DialogueFirst', 'SceneWeight', 'SoftCutBeliever', 'BeatThatLanded', 'QuietPeak',
+    ],
   },
   {
     archetype: 'character_stan',
-    strategy:
-      'Wear your heart on your sleeve for one cast member. Hurt, proud, protective, disappointed — argue from feeling, then cite the Ep.',
-    flair: 'character first',
     bias: 'mid',
-    namePool: ['ArcOrNothing', 'StanTheCaptain', 'NameOnThePage', 'GriefMeter'],
+    flairs: ['character first', 'protective mode', 'arc or nothing', 'soft for them'],
+    strategies: [
+      'Wear your heart for one cast member — hurt, proud, protective.',
+      'Argue from feeling first, then cite the Ep that did it.',
+      'Get soft/mad when their turn feels unfair.',
+    ],
+    namePool: [
+      'ArcOrNothing', 'StanTheCaptain', 'NameOnThePage', 'GriefMeter', 'SoftForThem',
+      'ProtectTheLead', 'HeartOnSleeve', 'ThatOneCharacter', 'EpHurtClub', 'LoyalToAFault',
+    ],
   },
   {
     archetype: 'dropoff_risk',
-    strategy:
-      'Tired and honest. Say where you paused, what drained you, what tiny hook might bring you back. Soft quit energy, not a survey answer.',
-    flair: 'paused at Ep ?',
     bias: 'mid',
-    namePool: ['PausedOnEp', 'ComeBackLater', 'DropThreat', 'WillItGetBetter'],
+    flairs: ['paused at Ep ?', 'maybe later', 'tired binge', 'come back if…'],
+    strategies: [
+      'Honest pause energy — say where you stopped and what might bring you back.',
+      'Soft quit, not a survey. Ask if a later Ep actually pays off.',
+      'Admit fatigue without performing hate.',
+    ],
+    namePool: [
+      'PausedOnEp', 'ComeBackLater', 'DropThreat', 'WillItGetBetter', 'HalfBingeLeft',
+      'SleepInstead', 'MaybeTomorrow', 'QuitAdjacent', 'EnergyGone', 'HookMeBack',
+    ],
   },
   {
     archetype: 'contrarian',
-    strategy:
-      'Spiky, playful disagreement. Take the lonely angle with feeling — not a debate-club rebuttal. Never clone the last comment.',
-    flair: 'devil advocate',
     bias: 'slop',
-    namePool: ['OppositeDay', 'HotColdTake', 'NotThatTake', 'ArgueDiffer'],
+    flairs: ['devil advocate', 'lonely take', 'not that take', 'argue different'],
+    strategies: [
+      'Spiky playful disagreement — take the lonely angle with feeling.',
+      'If the feed agrees, push the under-discussed beat. Never clone.',
+      'Steelman the villain of the thread without becoming a debate club.',
+    ],
+    namePool: [
+      'OppositeDay', 'HotColdTake', 'NotThatTake', 'ArgueDiffer', 'UnderdogAngle',
+      'WaitActually', 'CounterFog', 'SpikyTake', 'LonelyOpinion', 'FlipTheThread',
+    ],
   },
   {
     archetype: 'hype_beast',
-    strategy:
-      'Loud joy. Name the moment that made you yell / grin / hit replay. Short and alive — empty hype not allowed.',
-    flair: 'standing ovation',
     bias: 'masterpiece',
-    namePool: ['LetsGoooFog', 'ClipThatBeat', 'HypeTrainEp', 'OneMoreEp'],
+    flairs: ['standing ovation', 'hit replay', 'one more ep', 'yelling'],
+    strategies: [
+      'Loud joy — name the moment that made you yell or hit replay.',
+      'Short and alive. Empty hype not allowed.',
+      'Celebrate a specific Ep beat like you just clipped it.',
+    ],
+    namePool: [
+      'LetsGoooFog', 'ClipThatBeat', 'HypeTrainEp', 'OneMoreEp', 'ScreamingQuietly',
+      'ReplayButton', 'ChestHit', 'ThatPeakTho', 'GoOffShow', 'StandingO',
+    ],
   },
   {
     archetype: 'confused_newbie',
-    strategy:
-      'Lost but invested. Ask who/when/why with a little panic or embarrassment. Admit what you missed; keep it warm.',
-    flair: 'first binge',
     bias: 'solid',
-    namePool: ['WaitWhoDied', 'TimelineLost', 'NewbieNotes', 'ExplainLikeImEp1'],
+    flairs: ['first binge', 'wait who', 'timeline lost', 'explain gently'],
+    strategies: [
+      'Lost but invested — ask who/when/why with a little panic.',
+      'Admit what you missed; keep it warm.',
+      'Clarify a cast/Ep mixup without fake confidence.',
+    ],
+    namePool: [
+      'WaitWhoDied', 'TimelineLost', 'NewbieNotes', 'ExplainLikeImEp1', 'ConfusedButIn',
+      'WhoIsThatAgain', 'FirstBingeBrain', 'LostAtEp', 'HoldOnWhat', 'CatchMeUp',
+    ],
   },
+];
+
+const NAME_PREFIX = [
+  'Fog', 'Gray', 'Night', 'Soft', 'Wild', 'Quiet', 'Loud', 'Salt', 'Iron', 'Pale',
+  'Burnt', 'Lucky', 'Tired', 'Sweet', 'Broken', 'Late', 'Early', 'Cold', 'Warm', 'Hollow',
+];
+const NAME_SUFFIX = [
+  'Listener', 'Margin', 'Archive', 'Thread', 'Pulse', 'Echo', 'Receipt', 'Notebook',
+  'Binger', 'Stan', 'Crit', 'Ghost', 'Meter', 'Radio', 'Page', 'Drop', 'Fan', 'Owl',
+];
+
+const SPAWN_VERBS = [
+  'joined the sub',
+  'slid into the feed',
+  'opened the thread',
+  'clocked in',
+  'wandered in',
+  'hopped on',
+  'showed up spicy',
+  'came back for blood',
 ];
 
 const KINDS: RedditPostKind[] = [
@@ -172,15 +246,44 @@ function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function pickName(pool: string[], used: Set<string>, seed: number, i: number): string {
-  for (let k = 0; k < pool.length; k++) {
-    const name = pool[(seed + i + k) % pool.length];
-    if (!used.has(name.toLowerCase())) {
-      used.add(name.toLowerCase());
+function mulberry32(seed: number) {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleInPlace<T>(arr: T[], rand: () => number): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function pickOne<T>(list: T[], rand: () => number): T {
+  return list[Math.floor(rand() * list.length) % list.length];
+}
+
+function mintUsername(used: Set<string>, rand: () => number, pool: string[], i: number): string {
+  const tries = [
+    ...shuffleInPlace([...pool], rand),
+    `${pickOne(NAME_PREFIX, rand)}${pickOne(NAME_SUFFIX, rand)}`,
+    `${pickOne(NAME_PREFIX, rand)}${pickOne(NAME_SUFFIX, rand)}${Math.floor(rand() * 90 + 10)}`,
+    `${pickOne(pool, rand)}${Math.floor(rand() * 90 + 10)}`,
+    `u${Math.floor(rand() * 9000 + 1000)}fan`,
+  ];
+  for (const name of tries) {
+    const key = name.toLowerCase();
+    if (!used.has(key)) {
+      used.add(key);
       return name;
     }
   }
-  const fallback = `${pool[0]}${i + 1}`;
+  const fallback = `Fan${i + 1}_${Math.floor(rand() * 900 + 100)}`;
   used.add(fallback.toLowerCase());
   return fallback;
 }
@@ -201,7 +304,6 @@ export function resolveSpawnPlan(config?: {
     4,
     agentCount
   );
-  // Depth stays meaningful but not spammy; soft post ceiling separate from cast size
   const minCommentsPerPost = 6;
   const depthWaves = 4;
   return { agentCount, rounds, activePerRound, minCommentsPerPost, depthWaves };
@@ -219,6 +321,7 @@ export function createArena(opts: {
   };
 }): SubState {
   const seed = Math.floor(Math.random() * 9000 + 1000);
+  const rand = mulberry32(seed);
   const episodes = opts.episodes || [];
   const grounding = extractStructureFromEpisodes(episodes);
   const brief = buildRoomBrief(episodes);
@@ -229,44 +332,63 @@ export function createArena(opts: {
   });
   const n = plan.agentCount;
   const used = new Set<string>();
-  const agents: ArenaAgent[] = [];
+  const castNames = grounding.characters.slice(0, 16).map((c) => c.name);
+  const castHint = castNames.length ? pickOne(castNames, rand) : 'the lead';
+  const epHint = 1 + Math.floor(rand() * Math.max(1, episodes.length));
 
-  for (let i = 0; i < n; i++) {
-    const arch = ARCHETYPES[i % ARCHETYPES.length];
-    const username = pickName(arch.namePool, used, seed, i);
-    agents.push({
+  // Shuffle archetype deck each run so spawn order isn't always lore→pacing→…
+  const deck = shuffleInPlace(
+    Array.from({ length: n }, (_, i) => ARCHETYPES[i % ARCHETYPES.length]),
+    rand
+  );
+
+  const agents: ArenaAgent[] = deck.map((arch, i) => {
+    const strategy = pickOne(arch.strategies, rand);
+    const flair = pickOne(arch.flairs, rand);
+    const username = mintUsername(used, rand, arch.namePool, i);
+    return {
       id: `agent_${i + 1}`,
       username,
       archetype: arch.archetype,
-      strategy: arch.strategy,
-      flair: arch.flair,
+      strategy,
+      flair,
       bias: arch.bias,
-    });
-  }
+    };
+  });
 
   const slug = (opts.title || 'Series')
     .replace(/[^a-zA-Z0-9]+/g, '')
     .slice(0, 18) || 'Series';
 
-  const events: ArenaEvent[] = agents.map((a) => ({
-    type: 'agent_spawned' as const,
-    ts: Date.now(),
-    agentId: a.id,
-    username: a.username,
-    summary: `Spawned u/${a.username} (${a.archetype}) — ${a.strategy.slice(0, 80)}`,
-  }));
+  const events: ArenaEvent[] = agents.map((a) => {
+    const verb = pickOne(SPAWN_VERBS, rand);
+    const hooks = [
+      `watching ${castHint}`,
+      `still mad about Ep ${epHint}`,
+      `here for ${a.flair}`,
+      `eye on Ep ${epHint}`,
+      'soft for this mess',
+    ];
+    return {
+      type: 'agent_spawned' as const,
+      ts: Date.now(),
+      agentId: a.id,
+      username: a.username,
+      summary: `u/${a.username} ${verb} · ${a.archetype.replace(/_/g, ' ')} · ${pickOne(hooks, rand)}`,
+    };
+  });
 
   return {
     runId: `run_${Date.now()}_${seed}`,
     title: opts.title || 'Untitled',
     subreddit: `r/${slug}Arena`,
-    tagline: `${opts.title || 'Series'} — ${agents.length} fans · ${plan.rounds} rounds`,
+    tagline: `${opts.title || 'Series'} — ${agents.length} fans · ${plan.rounds} rounds · seed ${seed}`,
     posts: [],
     agents,
     events,
     brief,
     epCount: episodes.length,
-    castNames: grounding.characters.slice(0, 16).map((c) => c.name),
+    castNames,
     seed,
     plan,
   };

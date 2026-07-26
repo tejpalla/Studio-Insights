@@ -172,7 +172,7 @@ export default function App() {
 
           if (msg.kind === 'event' && msg.event) {
             pushLine(msg.event);
-          } else if (msg.kind === 'result' && msg.insights) {
+          } else if ((msg.kind === 'snapshot' || msg.kind === 'result') && msg.insights) {
             setInsights(
               normalizeInsightsClient(msg.insights, {
                 seriesId: script.id,

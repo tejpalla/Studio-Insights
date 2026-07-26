@@ -1003,15 +1003,46 @@ app.post('/api/arena/stream', async (req, res) => {
       `Arena stream: ${getArenaModel()} · ${state.agents.length} agents · ${state.plan.rounds} rounds · ${state.plan.activePerRound} active/round`
     );
 
-    await runArena(state, generateAgentJson, {
-      onEvent: (ev) => send({ kind: 'event', event: ev }),
-    });
-
-    const payload = arenaToInsightsPayload(state, {
+    const meta = {
       seriesId: seriesId || state.runId,
       title: title || state.title,
       episodes,
+    };
+
+    const sendSnapshot = () => {
+      if (state.posts.length === 0) return;
+      try {
+        const payload = arenaToInsightsPayload(state, meta);
+        const normalized = normalizeInsightsResult(
+          { ...payload, isDemoFixture: false },
+          {
+            seriesId: payload.seriesId,
+            title: payload.title,
+            episodeCount: episodes.length,
+            episodes,
+          }
+        );
+        send({ kind: 'snapshot', insights: normalized, live: true });
+      } catch (err: any) {
+        console.warn('Arena snapshot failed:', err?.message || err);
+      }
+    };
+
+    await runArena(state, generateAgentJson, {
+      onEvent: (ev) => {
+        send({ kind: 'event', event: ev });
+        if (
+          ev.type === 'action' ||
+          ev.type === 'round_end' ||
+          ev.type === 'depth_wave' ||
+          ev.type === 'complete'
+        ) {
+          sendSnapshot();
+        }
+      },
     });
+
+    const payload = arenaToInsightsPayload(state, meta);
     send({
       kind: 'event',
       event: {

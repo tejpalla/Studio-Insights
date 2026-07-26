@@ -50,6 +50,11 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
         <h1 className="font-display text-3xl text-ink">{script.title}</h1>
         <p className="text-sm text-ink-muted flex flex-wrap items-center gap-2">
           {result?.arena || arenaLive ? 'Multi-agent Reddit arena' : 'Simulated fandom sub'}
+          {arenaLive && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-900 border border-emerald-300">
+              Live board updating
+            </span>
+          )}
           {result?.isDemoFixture && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 border border-amber-300">
               Labeled demo fixture
@@ -130,16 +135,17 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
         <div className="border border-dashed border-line rounded-xl p-10 text-center space-y-2 bg-white/40">
           {arenaLive ? (
             <>
-              <p className="text-ink font-medium">Spectating the arena…</p>
+              <p className="text-ink font-medium">Arena is running…</p>
               <p className="text-sm text-ink-muted max-w-md mx-auto">
-                Agents are posting and fighting in turns. The interactive sub fills when the run completes.
+                Watch the live log above. Posts show up here as soon as agents write them — then depth
+                waves add replies. This can take a few minutes on a strong model.
               </p>
             </>
           ) : (
             <>
               <p className="text-ink font-medium">Room’s empty</p>
               <p className="text-sm text-ink-muted max-w-md mx-auto">
-                Open Series and hit Run arena — 8 persona bots take turns on your script.
+                Open Series and hit Run arena — fan personas take turns on your script.
               </p>
             </>
           )}
