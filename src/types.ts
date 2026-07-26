@@ -205,6 +205,18 @@ export interface InsightsResult {
     agentCount: number;
     rounds: number;
     eventCount: number;
+    postCount?: number;
+    commentCount?: number;
+    /** Top reply-storm posts — preview of what Databricks heat notebook scores */
+    replyStorms?: Array<{ postId: string; title: string; commentCount: number }>;
+    databricks?: {
+      synced: boolean;
+      mode: 'skipped' | 'local_only' | 'volume_upload' | 'error';
+      volumePath?: string;
+      localDir?: string;
+      message?: string;
+      files?: string[];
+    };
     events?: Array<{
       type: string;
       ts: number;

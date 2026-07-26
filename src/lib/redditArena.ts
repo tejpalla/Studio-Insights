@@ -642,6 +642,19 @@ function leaveReasonsFrom(state: SubState) {
   return reasons;
 }
 
+function replyStormsFrom(posts: RedditPost[]) {
+  return posts
+    .map((p) => {
+      const commentCount = (p.comments || []).reduce(
+        (n, c) => n + 1 + (c.replies?.length || 0),
+        0
+      );
+      return { postId: p.id, title: p.title, commentCount };
+    })
+    .sort((a, b) => b.commentCount - a.commentCount)
+    .slice(0, 5);
+}
+
 /** Map arena SubState → InsightsResult-shaped payload (room + personas + light dna/cut). */
 export function arenaToInsightsPayload(
   state: SubState,
@@ -654,6 +667,11 @@ export function arenaToInsightsPayload(
   const scale = scaleFandomFromStory(meta.episodes.length, grounding.characters.length);
   const personas = personasFrom(state);
   const leaveReasons = leaveReasonsFrom(state);
+  const storms = replyStormsFrom(posts);
+  const commentCount = posts.reduce(
+    (n, p) => n + (p.comments || []).reduce((m, c) => m + 1 + (c.replies?.length || 0), 0),
+    0
+  );
 
   const disputed =
     posts.find((p) => (p.comments?.length || 0) >= 2) || posts[0] || null;
@@ -670,7 +688,20 @@ export function arenaToInsightsPayload(
       agentCount: state.agents.length,
       rounds: ARENA_ROUNDS,
       eventCount: state.events.length,
+      postCount: posts.length,
+      commentCount,
+      replyStorms: storms,
       events: state.events,
+      databricks: undefined as
+        | {
+            synced: boolean;
+            mode: 'skipped' | 'local_only' | 'volume_upload' | 'error';
+            volumePath?: string;
+            localDir?: string;
+            message?: string;
+            files?: string[];
+          }
+        | undefined,
     },
     room: {
       subreddit: state.subreddit,
@@ -696,7 +727,7 @@ export function arenaToInsightsPayload(
         wouldLeavePct: 30,
         leaveReasons,
         researchNote:
-          'Arena: 8 agents × 3 rounds (emergent). Scale path: Databricks batches thousands of sims. Participation still ~90-9-1 on the silent majority.',
+          'Helix runs agents live. Databricks Free stores the event pack and clusters what sparks heat across runs.',
         onlineNow: scale.onlineNow,
         postsPerDay: scale.postsPerDay,
         commentsPerDay: scale.commentsPerDay,
@@ -712,7 +743,7 @@ export function arenaToInsightsPayload(
       timeline: grounding.timeline,
     },
     dna: {
-      summary: `Multi-agent arena on “${state.title}”: ${posts.length} emergent posts from ${state.agents.length} bots.`,
+      summary: `Multi-agent arena on “${state.title}”: ${posts.length} posts / ${commentCount} comments from ${state.agents.length} bots.`,
       pacing: 55,
       suspense: 60,
       romance: 20,

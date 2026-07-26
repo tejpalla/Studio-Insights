@@ -17,6 +17,11 @@ import {
   createArena,
   runArena,
 } from './src/lib/redditArena.ts';
+import {
+  buildArenaExportPack,
+  isDatabricksConfigured,
+  syncArenaPackToDatabricksFree,
+} from './src/lib/databricksFree.ts';
 
 dotenv.config();
 
@@ -95,6 +100,26 @@ function persistArenaRun(runId: string, jsonl: string, payload: unknown) {
   } catch (err: any) {
     console.warn('Could not persist arena run:', err?.message || err);
   }
+}
+
+/** Local pack + Databricks Unity Catalog volume sync. */
+async function finalizeArenaWithDatabricks(state: any, sync = true) {
+  const jsonl = arenaEventsToJsonl(state);
+  persistArenaRun(state.runId, jsonl, {
+    runId: state.runId,
+    title: state.title,
+    agents: state.agents.map((a: any) => ({
+      id: a.id,
+      username: a.username,
+      archetype: a.archetype,
+    })),
+    postCount: state.posts.length,
+    eventCount: state.events.length,
+  });
+  const pack = buildArenaExportPack(state, jsonl);
+  const databricks = await syncArenaPackToDatabricksFree(pack, { sync });
+  console.log('[Databricks Free]', databricks.mode, databricks.volumePath || databricks.localDir, databricks.message);
+  return { jsonl, databricks };
 }
 
 /** Flagship default: gpt-5.6 → Sol. Override with OPENAI_MODEL=gpt-5.6-terra|gpt-4.1|etc. */
@@ -951,7 +976,7 @@ app.post('/api/insights', async (req, res) => {
 /** Phase 2: multi-agent Reddit arena (batch result). */
 app.post('/api/arena/run', async (req, res) => {
   try {
-    const { title, genre, episodes, seriesId } = req.body;
+    const { title, genre, episodes, seriesId, syncDatabricks } = req.body;
     if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
       return res.status(400).json({ error: 'At least one episode script is required.' });
     }
@@ -968,14 +993,8 @@ app.post('/api/arena/run', async (req, res) => {
       title: title || state.title,
       episodes,
     });
-    const jsonl = arenaEventsToJsonl(state);
-    persistArenaRun(state.runId, jsonl, {
-      runId: state.runId,
-      title: state.title,
-      agents: state.agents.map((a) => ({ id: a.id, username: a.username, archetype: a.archetype })),
-      postCount: state.posts.length,
-      eventCount: state.events.length,
-    });
+    const { databricks } = await finalizeArenaWithDatabricks(state, syncDatabricks !== false);
+    payload.arena = { ...payload.arena, databricks };
 
     return res.json(
       normalizeInsightsResult(
@@ -997,7 +1016,7 @@ app.post('/api/arena/run', async (req, res) => {
 /** Phase 2: SSE spectator stream — events then final insights payload. */
 app.post('/api/arena/stream', async (req, res) => {
   try {
-    const { title, genre, episodes, seriesId } = req.body;
+    const { title, genre, episodes, seriesId, syncDatabricks } = req.body;
     if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
       return res.status(400).json({ error: 'At least one episode script is required.' });
     }
@@ -1027,6 +1046,19 @@ app.post('/api/arena/stream', async (req, res) => {
       title: title || state.title,
       episodes,
     });
+    send({
+      kind: 'event',
+      event: {
+        type: 'round_end',
+        ts: Date.now(),
+        summary: isDatabricksConfigured()
+          ? 'Syncing arena pack to Databricks…'
+          : 'Writing arena export pack…',
+      },
+    });
+    const { jsonl, databricks } = await finalizeArenaWithDatabricks(state, syncDatabricks !== false);
+    payload.arena = { ...payload.arena, databricks };
+
     const normalized = normalizeInsightsResult(
       { ...payload, isDemoFixture: false },
       {
@@ -1037,16 +1069,7 @@ app.post('/api/arena/stream', async (req, res) => {
       }
     );
 
-    const jsonl = arenaEventsToJsonl(state);
-    persistArenaRun(state.runId, jsonl, {
-      runId: state.runId,
-      title: state.title,
-      agents: state.agents.map((a) => ({ id: a.id, username: a.username, archetype: a.archetype })),
-      postCount: state.posts.length,
-      eventCount: state.events.length,
-    });
-
-    send({ kind: 'result', insights: normalized, jsonl });
+    send({ kind: 'result', insights: normalized, jsonl, databricks });
     send({ kind: 'done' });
     res.end();
   } catch (error: any) {
@@ -1062,13 +1085,37 @@ app.post('/api/arena/stream', async (req, res) => {
 });
 
 app.get('/api/arena/export/:runId', (req, res) => {
-  const file = path.join(process.cwd(), 'data', 'arena-runs', `${req.params.runId}.jsonl`);
+  const packFile = path.join(
+    process.cwd(),
+    'data',
+    'arena-runs',
+    req.params.runId,
+    'events.jsonl'
+  );
+  const legacy = path.join(process.cwd(), 'data', 'arena-runs', `${req.params.runId}.jsonl`);
+  const file = fs.existsSync(packFile) ? packFile : legacy;
   if (!fs.existsSync(file)) {
     return res.status(404).json({ error: 'Run not found.' });
   }
   res.setHeader('Content-Type', 'application/x-ndjson');
   res.setHeader('Content-Disposition', `attachment; filename="${req.params.runId}.jsonl"`);
   return res.sendFile(file);
+});
+
+app.get('/api/databricks/status', (_req, res) => {
+  res.json({
+    configured: isDatabricksConfigured(),
+    hostSet: Boolean(process.env.DATABRICKS_HOST),
+    catalog: process.env.DATABRICKS_CATALOG || 'workspace',
+    schema: process.env.DATABRICKS_SCHEMA || 'default',
+    volume: process.env.DATABRICKS_VOLUME || 'helix_arena',
+    role: 'Helix runs the live multi-agent arena. Databricks stores each run and clusters what sparks heat at scale.',
+    docs: [
+      'docs/databricks/setup.sql',
+      'docs/databricks/helix_arena_heat.py',
+      'docs/DATABRICKS_SCALE.md',
+    ],
+  });
 });
 
 app.post('/api/dropoff-from-csv', async (req, res) => {
@@ -1110,6 +1157,7 @@ app.get('/api/health', (req, res) => {
     model: getRoomModel(),
     arenaModel: getArenaModel(),
     reasoningEffort: getReasoningEffort(),
+    databricksConfigured: isDatabricksConfigured(),
     timestamp: new Date().toISOString(),
   });
 });
