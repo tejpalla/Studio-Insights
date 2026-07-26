@@ -6,6 +6,7 @@ import { StudioHeader } from './components/insights/StudioHeader';
 import { HomeView } from './components/insights/HomeView';
 import { SeriesView } from './components/insights/SeriesView';
 import { InsightsWorkspace } from './components/insights/InsightsWorkspace';
+import type { ArenaTickerLine } from './components/insights/ArenaTicker';
 
 export default function App() {
   const [view, setView] = useState<AppView>('home');
@@ -16,6 +17,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [acceptedVariant, setAcceptedVariant] = useState<'fast' | 'detailed' | null>(null);
   const [isStale, setIsStale] = useState(false);
+  const [arenaLines, setArenaLines] = useState<ArenaTickerLine[]>([]);
+  const [arenaLive, setArenaLive] = useState(false);
 
   const openSeries = (s: StoryScript) => {
     setScript(JSON.parse(JSON.stringify(s)));
@@ -23,6 +26,8 @@ export default function App() {
     setAcceptedVariant(null);
     setError(null);
     setIsStale(false);
+    setArenaLines([]);
+    setArenaLive(false);
     setSection('thread');
     setView('series');
   };
@@ -37,6 +42,8 @@ export default function App() {
     setIsRunning(true);
     setError(null);
     setAcceptedVariant(null);
+    setArenaLive(false);
+    setArenaLines([]);
 
     try {
       const res = await fetch('/api/insights', {
@@ -67,6 +74,106 @@ export default function App() {
     } catch (err: any) {
       setError(err.message || 'Room simulation failed');
     } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const runArena = async () => {
+    if (!script) return;
+    setIsRunning(true);
+    setError(null);
+    setAcceptedVariant(null);
+    setArenaLines([]);
+    setArenaLive(true);
+    setInsights(null);
+    setSection('thread');
+    setView('insights');
+
+    try {
+      const res = await fetch('/api/arena/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seriesId: script.id,
+          title: script.title,
+          genre: script.genre,
+          episodes: script.episodes,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Arena failed (${res.status})`);
+      }
+      if (!res.body) throw new Error('No stream from arena.');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let lineSeq = 0;
+
+      const pushLine = (ev: {
+        type?: string;
+        summary?: string;
+        round?: number;
+        username?: string;
+      }) => {
+        if (!ev?.summary) return;
+        lineSeq += 1;
+        setArenaLines((prev) =>
+          [
+            ...prev,
+            {
+              id: `arena-${lineSeq}`,
+              summary: ev.summary!,
+              type: ev.type,
+              round: ev.round,
+              username: ev.username,
+            },
+          ].slice(-40)
+        );
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop() || '';
+
+        for (const chunk of chunks) {
+          const dataLine = chunk
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => l.startsWith('data:'));
+          if (!dataLine) continue;
+          let msg: any;
+          try {
+            msg = JSON.parse(dataLine.replace(/^data:\s*/, ''));
+          } catch {
+            continue;
+          }
+
+          if (msg.kind === 'event' && msg.event) {
+            pushLine(msg.event);
+          } else if (msg.kind === 'result' && msg.insights) {
+            setInsights(
+              normalizeInsightsClient(msg.insights, {
+                seriesId: script.id,
+                title: script.title,
+              })
+            );
+            setIsStale(false);
+          } else if (msg.kind === 'error') {
+            throw new Error(msg.error || 'Arena stream failed');
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Arena simulation failed');
+      setView('series');
+    } finally {
+      setArenaLive(false);
       setIsRunning(false);
     }
   };
@@ -138,6 +245,7 @@ export default function App() {
             setScript={updateScript}
             isRunning={isRunning}
             error={error}
+            onRunArena={runArena}
             onRunInsights={runInsights}
             onBackHome={() => setView('home')}
             canUseFixture={script.id === DEMO_SERIES.id}
@@ -153,14 +261,21 @@ export default function App() {
             acceptedVariant={acceptedVariant}
             onDropOff={onDropOff}
             isStale={isStale}
-            onRerun={() => runInsights(insights?.isDemoFixture ? { useDemoFixture: true } : undefined)}
+            arenaLines={arenaLines}
+            arenaLive={arenaLive}
+            onRerunArena={runArena}
+            onRerun={() =>
+              insights?.arena
+                ? runArena()
+                : runInsights(insights?.isDemoFixture ? { useDemoFixture: true } : undefined)
+            }
           />
         )}
       </main>
 
       <footer className="border-t border-line py-3 px-5">
         <div className="max-w-5xl mx-auto flex justify-between text-[11px] text-ink-muted">
-          <span>Studio Insights · simulated Reddit room</span>
+          <span>Studio Insights · multi-agent Reddit arena</span>
           <span>
             {script?.id === DEMO_SERIES.id
               ? 'Demo: Harbor Ward'

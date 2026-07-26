@@ -25,6 +25,22 @@ export const MapPanel: React.FC<{
         </p>
       </div>
 
+      {result.arena?.runId && (
+        <div className="border border-line rounded-xl p-4 space-y-2 bg-white/60">
+          <h3 className="text-sm font-semibold text-ink">Arena export</h3>
+          <p className="text-xs text-ink-muted">
+            Event log for Databricks-scale path ({result.arena.eventCount} events ·{' '}
+            {result.arena.agentCount} agents). See docs/DATABRICKS_SCALE.md.
+          </p>
+          <a
+            href={`/api/arena/export/${result.arena.runId}`}
+            className="inline-block text-xs font-medium text-[#ff4500] hover:underline"
+          >
+            Download {result.arena.runId}.jsonl
+          </a>
+        </div>
+      )}
+
       {hasDna && result.dna ? (
         <DnaPanel dna={result.dna} />
       ) : (

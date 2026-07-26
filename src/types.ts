@@ -199,6 +199,20 @@ export interface InsightsResult {
   cut: CutProposal | null;
   dropOff?: DropOffInsight | null;
   isDemoFixture?: boolean;
+  /** Phase 2 multi-agent arena metadata */
+  arena?: {
+    runId: string;
+    agentCount: number;
+    rounds: number;
+    eventCount: number;
+    events?: Array<{
+      type: string;
+      ts: number;
+      round?: number;
+      username?: string;
+      summary: string;
+    }>;
+  };
 }
 
 export type AppView = 'home' | 'series' | 'insights';

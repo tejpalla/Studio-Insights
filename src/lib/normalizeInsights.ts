@@ -439,5 +439,6 @@ export function normalizeInsightsClient(parsed: any, meta?: { seriesId?: string;
     confusion: parsed?.confusion ?? null,
     cut: parsed?.cut ?? null,
     dropOff: parsed?.dropOff ?? null,
+    arena: parsed?.arena ?? undefined,
   };
 }

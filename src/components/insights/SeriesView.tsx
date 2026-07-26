@@ -6,6 +6,7 @@ interface SeriesViewProps {
   setScript: (s: StoryScript) => void;
   isRunning: boolean;
   error: string | null;
+  onRunArena: () => void;
   onRunInsights: (opts?: { useDemoFixture?: boolean }) => void;
   onBackHome: () => void;
   canUseFixture: boolean;
@@ -16,6 +17,7 @@ export const SeriesView: React.FC<SeriesViewProps> = ({
   setScript,
   isRunning,
   error,
+  onRunArena,
   onRunInsights,
   onBackHome,
   canUseFixture,
@@ -39,17 +41,25 @@ export const SeriesView: React.FC<SeriesViewProps> = ({
             className="block w-full font-display text-3xl bg-transparent border-0 border-b border-transparent focus:border-line focus:outline-none text-ink"
           />
           <p className="text-sm text-ink-muted">
-            {script.genre} · {script.episodes.length} episodes · more eps → bigger simulated room
+            {script.genre} · {script.episodes.length} episodes · 8 bots take turns on the same sub
           </p>
         </div>
         <div className="flex flex-col gap-2 shrink-0">
           <button
             type="button"
             disabled={isRunning}
-            onClick={() => onRunInsights()}
+            onClick={onRunArena}
             className="px-5 py-3 bg-[#ff4500] text-white text-sm font-semibold rounded-full hover:bg-orange-600 disabled:opacity-50 shadow-sm"
           >
-            {isRunning ? 'Room is filling…' : 'Open the Reddit room'}
+            {isRunning ? 'Arena running…' : 'Run arena'}
+          </button>
+          <button
+            type="button"
+            disabled={isRunning}
+            onClick={() => onRunInsights()}
+            className="px-4 py-2 text-xs text-ink-muted border border-line rounded-full hover:bg-paper-2 disabled:opacity-50"
+          >
+            One-shot room (legacy)
           </button>
           {canUseFixture && (
             <button

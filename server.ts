@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
@@ -9,6 +10,13 @@ import {
   buildInsightsUserPrompt,
 } from './src/lib/redditRoomPrompt.ts';
 import { buildEngagementFunnel } from './src/lib/normalizeInsights.ts';
+import {
+  ARENA_ROUNDS,
+  arenaEventsToJsonl,
+  arenaToInsightsPayload,
+  createArena,
+  runArena,
+} from './src/lib/redditArena.ts';
 
 dotenv.config();
 
@@ -23,6 +31,69 @@ function getOpenAIClient() {
     throw new Error('OPENAI_API_KEY is missing. Add it to your .env file.');
   }
   return new OpenAI({ apiKey });
+}
+
+/** Agent turns: smaller output, prefer cheaper model override OPENAI_ARENA_MODEL */
+function getArenaModel(): string {
+  return (process.env.OPENAI_ARENA_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6').trim();
+}
+
+async function generateAgentJson(system: string, user: string): Promise<string> {
+  const openai = getOpenAIClient();
+  const model = getArenaModel();
+  const isGpt56Family = /^gpt-5\.6/i.test(model) || /^gpt-5(?!\.\d)/i.test(model);
+
+  if (isGpt56Family && typeof (openai as any).responses?.create === 'function') {
+    try {
+      const response = await (openai as any).responses.create({
+        model,
+        reasoning: { effort: 'low' },
+        input: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        text: { format: { type: 'json_object' } },
+        max_output_tokens: 800,
+      });
+      const text =
+        response.output_text ||
+        response.output
+          ?.flatMap((item: any) => item?.content || [])
+          ?.filter((c: any) => c?.type === 'output_text' || c?.text)
+          ?.map((c: any) => c.text || c.output_text || '')
+          ?.join('') ||
+        '';
+      if (text?.trim()) return text;
+    } catch (err: any) {
+      console.warn('Arena Responses API failed, chat fallback:', err?.message || err);
+    }
+  }
+
+  const completion = await openai.chat.completions.create({
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    response_format: { type: 'json_object' },
+    ...(isGpt56Family ? {} : { temperature: 0.95 }),
+    max_tokens: 800,
+  } as any);
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error('Agent returned empty response.');
+  return content;
+}
+
+function persistArenaRun(runId: string, jsonl: string, payload: unknown) {
+  try {
+    const dir = path.join(process.cwd(), 'data', 'arena-runs');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${runId}.jsonl`), jsonl, 'utf8');
+    fs.writeFileSync(path.join(dir, `${runId}.summary.json`), JSON.stringify(payload, null, 2), 'utf8');
+  } catch (err: any) {
+    console.warn('Could not persist arena run:', err?.message || err);
+  }
 }
 
 /** Flagship default: gpt-5.6 → Sol. Override with OPENAI_MODEL=gpt-5.6-terra|gpt-4.1|etc. */
@@ -487,6 +558,7 @@ function normalizeInsightsResult(
     confusion: parsed?.confusion ?? null,
     cut: ensureCut(parsed?.cut, comments, episodes),
     dropOff: parsed?.dropOff ?? null,
+    arena: parsed?.arena ?? undefined,
   };
 }
 
@@ -875,6 +947,129 @@ app.post('/api/insights', async (req, res) => {
   }
 });
 
+/** Phase 2: multi-agent Reddit arena (batch result). */
+app.post('/api/arena/run', async (req, res) => {
+  try {
+    const { title, genre, episodes, seriesId } = req.body;
+    if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
+      return res.status(400).json({ error: 'At least one episode script is required.' });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY missing.' });
+    }
+
+    console.log(`Arena run: ${getArenaModel()} · ${ARENA_ROUNDS} rounds`);
+    const state = createArena({ title, genre, episodes });
+    await runArena(state, generateAgentJson, { rounds: ARENA_ROUNDS });
+
+    const payload = arenaToInsightsPayload(state, {
+      seriesId: seriesId || state.runId,
+      title: title || state.title,
+      episodes,
+    });
+    const jsonl = arenaEventsToJsonl(state);
+    persistArenaRun(state.runId, jsonl, {
+      runId: state.runId,
+      title: state.title,
+      agents: state.agents.map((a) => ({ id: a.id, username: a.username, archetype: a.archetype })),
+      postCount: state.posts.length,
+      eventCount: state.events.length,
+    });
+
+    return res.json(
+      normalizeInsightsResult(
+        { ...payload, isDemoFixture: false },
+        {
+          seriesId: payload.seriesId,
+          title: payload.title,
+          episodeCount: episodes.length,
+          episodes,
+        }
+      )
+    );
+  } catch (error: any) {
+    console.error('Arena run error:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'Arena simulation failed.' });
+  }
+});
+
+/** Phase 2: SSE spectator stream — events then final insights payload. */
+app.post('/api/arena/stream', async (req, res) => {
+  try {
+    const { title, genre, episodes, seriesId } = req.body;
+    if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
+      return res.status(400).json({ error: 'At least one episode script is required.' });
+    }
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY missing.' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const send = (data: unknown) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    console.log(`Arena stream: ${getArenaModel()} · ${ARENA_ROUNDS} rounds`);
+    const state = createArena({ title, genre, episodes });
+
+    await runArena(state, generateAgentJson, {
+      rounds: ARENA_ROUNDS,
+      onEvent: (ev) => send({ kind: 'event', event: ev }),
+    });
+
+    const payload = arenaToInsightsPayload(state, {
+      seriesId: seriesId || state.runId,
+      title: title || state.title,
+      episodes,
+    });
+    const normalized = normalizeInsightsResult(
+      { ...payload, isDemoFixture: false },
+      {
+        seriesId: payload.seriesId,
+        title: payload.title,
+        episodeCount: episodes.length,
+        episodes,
+      }
+    );
+
+    const jsonl = arenaEventsToJsonl(state);
+    persistArenaRun(state.runId, jsonl, {
+      runId: state.runId,
+      title: state.title,
+      agents: state.agents.map((a) => ({ id: a.id, username: a.username, archetype: a.archetype })),
+      postCount: state.posts.length,
+      eventCount: state.events.length,
+    });
+
+    send({ kind: 'result', insights: normalized, jsonl });
+    send({ kind: 'done' });
+    res.end();
+  } catch (error: any) {
+    console.error('Arena stream error:', error?.message || error);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: error?.message || 'Arena stream failed.' });
+    }
+    res.write(
+      `data: ${JSON.stringify({ kind: 'error', error: error?.message || 'Arena stream failed.' })}\n\n`
+    );
+    res.end();
+  }
+});
+
+app.get('/api/arena/export/:runId', (req, res) => {
+  const file = path.join(process.cwd(), 'data', 'arena-runs', `${req.params.runId}.jsonl`);
+  if (!fs.existsSync(file)) {
+    return res.status(404).json({ error: 'Run not found.' });
+  }
+  res.setHeader('Content-Type', 'application/x-ndjson');
+  res.setHeader('Content-Disposition', `attachment; filename="${req.params.runId}.jsonl"`);
+  return res.sendFile(file);
+});
+
 app.post('/api/dropoff-from-csv', async (req, res) => {
   try {
     const { rows, beatHint } = req.body as {
@@ -912,6 +1107,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     openai: Boolean(process.env.OPENAI_API_KEY),
     model: getRoomModel(),
+    arenaModel: getArenaModel(),
     reasoningEffort: getReasoningEffort(),
     timestamp: new Date().toISOString(),
   });

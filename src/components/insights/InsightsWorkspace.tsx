@@ -4,6 +4,7 @@ import { ThreadPanel } from './ThreadPanel';
 import { PulsePanel } from './PulsePanel';
 import { CutPanel } from './CutPanel';
 import { MapPanel } from './MapPanel';
+import { ArenaTicker, ArenaTickerLine } from './ArenaTicker';
 
 interface InsightsWorkspaceProps {
   script: StoryScript;
@@ -14,7 +15,10 @@ interface InsightsWorkspaceProps {
   acceptedVariant: 'fast' | 'detailed' | null;
   onDropOff: (dropOff: InsightsResult['dropOff']) => void;
   onRerun?: () => void;
+  onRerunArena?: () => void;
   isStale?: boolean;
+  arenaLines?: ArenaTickerLine[];
+  arenaLive?: boolean;
 }
 
 const SECTIONS: { id: InsightsSection; label: string }[] = [
@@ -33,34 +37,75 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
   acceptedVariant,
   onDropOff,
   onRerun,
+  onRerunArena,
   isStale,
+  arenaLines = [],
+  arenaLive,
 }) => {
+  const showTicker = arenaLive || arenaLines.length > 0 || Boolean(result?.arena);
+
   return (
     <div className="max-w-3xl mx-auto px-5 py-8 space-y-6">
       <div className="space-y-1">
         <h1 className="font-display text-3xl text-ink">{script.title}</h1>
         <p className="text-sm text-ink-muted flex flex-wrap items-center gap-2">
-          Simulated fandom sub
+          {result?.arena || arenaLive ? 'Multi-agent Reddit arena' : 'Simulated fandom sub'}
           {result?.isDemoFixture && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-900 border border-amber-300">
               Labeled demo fixture
             </span>
           )}
+          {result?.arena && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-orange-100 text-orange-900 border border-orange-300">
+              {result.arena.agentCount} agents · {result.arena.rounds} rounds
+            </span>
+          )}
         </p>
       </div>
+
+      {showTicker && (
+        <ArenaTicker
+          lines={
+            arenaLines.length
+              ? arenaLines
+              : (result?.arena?.events || []).map((e, i) => ({
+                  id: `hist-${i}`,
+                  summary: e.summary,
+                  type: e.type,
+                  round: e.round,
+                  username: e.username,
+                }))
+          }
+          isLive={arenaLive}
+          runId={result?.arena?.runId}
+          agentCount={result?.arena?.agentCount ?? 8}
+          rounds={result?.arena?.rounds ?? 3}
+        />
+      )}
 
       {isStale && (
         <div className="flex flex-wrap items-center justify-between gap-3 border border-amber-300 bg-amber-50 text-amber-950 text-sm px-4 py-3 rounded-xl">
           <span>Script changed — this room is from the older draft.</span>
-          {onRerun && (
-            <button
-              type="button"
-              onClick={onRerun}
-              className="px-3 py-1.5 bg-ink text-paper text-xs font-medium rounded"
-            >
-              Re-open the room
-            </button>
-          )}
+          <div className="flex gap-2">
+            {onRerunArena && (
+              <button
+                type="button"
+                onClick={onRerunArena}
+                className="px-3 py-1.5 bg-[#ff4500] text-white text-xs font-medium rounded"
+              >
+                Re-run arena
+              </button>
+            )}
+            {onRerun && (
+              <button
+                type="button"
+                onClick={onRerun}
+                className="px-3 py-1.5 bg-ink text-paper text-xs font-medium rounded"
+              >
+                Re-open the room
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -83,10 +128,21 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
 
       {!result ? (
         <div className="border border-dashed border-line rounded-xl p-10 text-center space-y-2 bg-white/40">
-          <p className="text-ink font-medium">Room’s empty</p>
-          <p className="text-sm text-ink-muted max-w-md mx-auto">
-            Open Series and drop your episodes into the simulated Reddit room.
-          </p>
+          {arenaLive ? (
+            <>
+              <p className="text-ink font-medium">Spectating the arena…</p>
+              <p className="text-sm text-ink-muted max-w-md mx-auto">
+                Agents are posting and fighting in turns. The interactive sub fills when the run completes.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-ink font-medium">Room’s empty</p>
+              <p className="text-sm text-ink-muted max-w-md mx-auto">
+                Open Series and hit Run arena — 8 persona bots take turns on your script.
+              </p>
+            </>
+          )}
         </div>
       ) : !result.room ? (
         <div className="border border-amber-300 bg-amber-50 text-amber-950 text-sm px-4 py-3 rounded-xl space-y-2">
@@ -111,8 +167,8 @@ export const InsightsWorkspace: React.FC<InsightsWorkspaceProps> = ({
             ) : (
               <EmptyTab
                 title="No stretch in dispute yet"
-                body="The model didn’t flag a specific beat for Your call. Re-open the room, or keep writing — the thread is still the main signal."
-                onRerun={onRerun}
+                body="The model didn’t flag a specific beat for Your call. Re-run the arena, or keep writing — the thread is still the main signal."
+                onRerun={onRerunArena || onRerun}
               />
             ))}
           {section === 'map' && <MapPanel result={result} onDropOff={onDropOff} />}
@@ -141,7 +197,7 @@ function EmptyTab({
           onClick={onRerun}
           className="px-4 py-2 text-sm font-medium rounded-full bg-[#ff4500] text-white"
         >
-          Re-open the room
+          Re-run arena
         </button>
       )}
     </div>
