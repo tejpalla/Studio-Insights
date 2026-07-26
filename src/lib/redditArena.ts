@@ -1135,19 +1135,156 @@ function personasFrom(state: SubState) {
 
 function leaveReasonsFrom(state: SubState) {
   const pacing = state.posts.filter((p) => p.kind === 'pacing' || p.kind === 'should_i_continue');
-  const reasons = pacing.slice(0, 3).map((p, i) => ({
-    reason: p.body?.slice(0, 140) || p.title,
-    episodeHint: `Ep ${p.aboutEpisode ?? '?'} · ${p.kind}`,
-    sharePct: Math.max(8, 28 - i * 6),
-  }));
-  if (reasons.length === 0) {
-    reasons.push({
-      reason: 'Mid-arc fatigue / clarity dips — emergent from arena lurkers',
-      episodeHint: `Ep ${Math.max(1, Math.floor(state.epCount / 2))}`,
-      sharePct: 22,
-    });
+  const rough = state.posts.filter((p) => p.vibe === 'mid' || p.vibe === 'slop');
+  const pool = pacing.length ? pacing : rough.length ? rough : state.posts;
+  const slice = pool.slice(0, 3);
+  if (slice.length === 0) {
+    return [
+      {
+        reason: 'No clear leave spike in this run — feed stayed relatively engaged.',
+        episodeHint: `Ep ${Math.max(1, Math.floor(state.epCount / 2))}`,
+        sharePct: 100,
+      },
+    ];
   }
-  return reasons;
+  const raw = slice.map((p, i) => ({
+    reason: (p.body?.trim() || p.title).slice(0, 160),
+    episodeHint: `Ep ${p.aboutEpisode ?? '?'} · ${p.kind}`,
+    weight: Math.max(1, 3 - i),
+  }));
+  const totalW = raw.reduce((s, r) => s + r.weight, 0);
+  let used = 0;
+  return raw.map((r, i) => {
+    const sharePct =
+      i === raw.length - 1 ? Math.max(1, 100 - used) : Math.max(1, Math.round((r.weight / totalW) * 100));
+    used += sharePct;
+    return { reason: r.reason, episodeHint: r.episodeHint, sharePct };
+  });
+}
+
+/** Engagement from THIS run's agents/posts — not a fake fixed 90-9-1 / 42-28-30 card. */
+function engagementFromArena(
+  state: SubState,
+  scale: ReturnType<typeof scaleFandomFromStory>,
+  leaveReasons: ReturnType<typeof leaveReasonsFrom>,
+  commentCount: number
+) {
+  const agentIds = state.agents.map((a) => a.id);
+  const actionByAgent = new Map<string, { posts: number; replies: number; upvotes: number; lurks: number }>();
+  for (const id of agentIds) {
+    actionByAgent.set(id, { posts: 0, replies: 0, upvotes: 0, lurks: 0 });
+  }
+  for (const ev of state.events) {
+    if (ev.type !== 'action' || !ev.agentId || !ev.action) continue;
+    const row = actionByAgent.get(ev.agentId);
+    if (!row) continue;
+    if (ev.action.action === 'new_post') row.posts += 1;
+    else if (ev.action.action === 'reply') row.replies += 1;
+    else if (ev.action.action === 'upvote') row.upvotes += 1;
+    else if (ev.action.action === 'lurk') row.lurks += 1;
+  }
+
+  let heavy = 0;
+  let occasional = 0;
+  let lurkers = 0;
+  for (const row of actionByAgent.values()) {
+    const voice = row.posts + row.replies;
+    if (voice === 0) lurkers += 1;
+    else if (row.posts >= 2 || voice >= 3) heavy += 1;
+    else occasional += 1;
+  }
+  const cast = Math.max(1, state.agents.length);
+  const lurkersPct = Math.round((lurkers / cast) * 100);
+  const occasionalPct = Math.round((occasional / cast) * 100);
+  const heavyPostersPct = Math.max(0, 100 - lurkersPct - occasionalPct);
+
+  const split = vibeSplitFrom(state.posts);
+  const vibeTotal = Math.max(
+    1,
+    split.masterpiece + split.solid + split.mid + split.slop
+  );
+  const roughShare = (split.mid + split.slop) / vibeTotal;
+  const praiseShare = (split.masterpiece + split.solid) / vibeTotal;
+  const dropKinds = state.posts.filter(
+    (p) => p.kind === 'pacing' || p.kind === 'should_i_continue'
+  ).length;
+  const quitPersonas = personasFrom(state).filter((p) => p.quitEpisode > 0).length;
+
+  let wouldLeavePct = Math.round(
+    12 + roughShare * 38 + dropKinds * 4 + quitPersonas * 3
+  );
+  let wouldPausePct = Math.round(14 + roughShare * 18 + dropKinds * 3);
+  let wouldFinishPct = Math.round(20 + praiseShare * 45);
+  const sum = wouldLeavePct + wouldPausePct + wouldFinishPct || 1;
+  wouldLeavePct = Math.round((wouldLeavePct / sum) * 100);
+  wouldPausePct = Math.round((wouldPausePct / sum) * 100);
+  wouldFinishPct = Math.max(0, 100 - wouldLeavePct - wouldPausePct);
+
+  const avgComments =
+    state.posts.length > 0 ? commentCount / state.posts.length : 0;
+  const controversyIndex = Math.min(
+    100,
+    Math.round(
+      25 +
+        roughShare * 45 +
+        Math.min(25, avgComments * 3) +
+        dropKinds * 4
+    )
+  );
+  const bingeCommitment = Math.min(
+    100,
+    Math.round(30 + wouldFinishPct * 0.55 + praiseShare * 20)
+  );
+  const depthScore = Math.min(
+    100,
+    Math.round(
+      scale.depthScore * 0.55 +
+        Math.min(30, state.posts.length * 3) +
+        Math.min(25, avgComments * 2.5)
+    )
+  );
+  let fandomMaturity: typeof scale.fandomMaturity = 'nascent';
+  if (depthScore >= 75) fandomMaturity = 'obsessed';
+  else if (depthScore >= 50) fandomMaturity = 'established';
+  else if (depthScore >= 28) fandomMaturity = 'growing';
+
+  // Story-size estimate scaled by how hot THIS run felt (not a live Reddit scrape)
+  const heat =
+    0.75 + Math.min(0.55, state.posts.length / 20 + commentCount / 80 + roughShare * 0.2);
+  const audienceSize = Math.max(400, Math.round(scale.audienceSize * heat));
+  const estimatedCommenters = Math.max(
+    commentCount,
+    Math.round(audienceSize * (0.008 + heavyPostersPct / 1000 + occasionalPct / 2000))
+  );
+  const estimatedViewers = Math.max(
+    estimatedCommenters,
+    Math.round(audienceSize * (0.7 + praiseShare * 0.15))
+  );
+  const onlineNow = Math.max(
+    state.agents.length,
+    Math.round(audienceSize * (0.003 + commentCount / 5000))
+  );
+
+  return {
+    audienceSize,
+    lurkersPct,
+    occasionalPct,
+    heavyPostersPct,
+    estimatedViewers,
+    estimatedCommenters,
+    wouldFinishPct,
+    wouldPausePct,
+    wouldLeavePct,
+    leaveReasons,
+    researchNote: `From this arena run: ${state.agents.length} agents → ${lurkers} quiet / ${occasional} light / ${heavy} heavy. Finish–pause–leave and controversy are inferred from post vibes + pacing/drop posts (not a fixed template). Audience size is a story-depth estimate scaled by this run’s heat — not live Reddit.`,
+    onlineNow,
+    postsPerDay: Math.max(1, state.posts.length),
+    commentsPerDay: Math.max(1, commentCount),
+    depthScore,
+    fandomMaturity,
+    controversyIndex,
+    bingeCommitment,
+  };
 }
 
 function replyStormsFrom(posts: RedditPost[]) {
@@ -1180,12 +1317,16 @@ export function arenaToInsightsPayload(
     (n, p) => n + (p.comments || []).reduce((m, c) => m + 1 + (c.replies?.length || 0), 0),
     0
   );
+  const engagement = engagementFromArena(state, scale, leaveReasons, commentCount);
 
   const disputed =
     posts.find((p) => (p.comments?.length || 0) >= 2) || posts[0] || null;
   const ep = disputed?.aboutEpisode || Math.max(1, Math.floor(state.epCount / 2));
   const epObj = meta.episodes.find((e) => Number(e.episodeNumber) === ep) || meta.episodes[0];
   const excerpt = (epObj?.scriptText || '').trim().slice(0, 500) || disputed?.body || '';
+
+  const dnaConflict = Math.min(100, Math.round(40 + ((split.mid + split.slop) / Math.max(1, split.masterpiece + split.solid + split.mid + split.slop)) * 50));
+  const dnaEmotion = Math.min(100, Math.round(35 + Math.min(40, commentCount * 1.2) + (split.masterpiece + split.slop) * 3));
 
   return {
     seriesId: meta.seriesId,
@@ -1214,36 +1355,13 @@ export function arenaToInsightsPayload(
     room: {
       subreddit: state.subreddit,
       tagline: state.tagline,
-      audienceSize: scale.audienceSize,
+      audienceSize: engagement.audienceSize,
       roomVibe: roomVibeFrom(split),
       vibeSplit: split,
       hotTakes: hotTakesFrom(state),
       posts,
       comments,
-      engagement: {
-        audienceSize: scale.audienceSize,
-        lurkersPct: 90,
-        occasionalPct: 9,
-        heavyPostersPct: 1,
-        estimatedViewers: Math.round(scale.audienceSize * 0.85),
-        estimatedCommenters: Math.max(
-          comments.length,
-          Math.round(scale.audienceSize * 0.02)
-        ),
-        wouldFinishPct: 42,
-        wouldPausePct: 28,
-        wouldLeavePct: 30,
-        leaveReasons,
-        researchNote:
-          'Helix runs agents live. Databricks Free stores the event pack and clusters what sparks heat across runs.',
-        onlineNow: scale.onlineNow,
-        postsPerDay: scale.postsPerDay,
-        commentsPerDay: scale.commentsPerDay,
-        depthScore: scale.depthScore,
-        fandomMaturity: scale.fandomMaturity,
-        controversyIndex: scale.controversyIndex,
-        bingeCommitment: scale.bingeCommitment,
-      },
+      engagement,
     },
     structure: {
       characters: grounding.characters,
@@ -1251,13 +1369,13 @@ export function arenaToInsightsPayload(
       timeline: grounding.timeline,
     },
     dna: {
-      summary: `Multi-agent arena on “${state.title}”: ${posts.length} posts / ${commentCount} comments from ${state.agents.length} bots.`,
-      pacing: 55,
-      suspense: 60,
+      summary: `Multi-agent arena on “${state.title}”: ${posts.length} posts / ${commentCount} comments from ${state.agents.length} fans.`,
+      pacing: Math.min(100, Math.round(45 + leaveReasons.length * 8 + (engagement.wouldPausePct || 0) * 0.3)),
+      suspense: Math.min(100, Math.round(40 + (engagement.controversyIndex || 0) * 0.4)),
       romance: 20,
-      conflict: 70,
-      dialogueDensity: 55,
-      emotionalIntensity: 58,
+      conflict: dnaConflict,
+      dialogueDensity: Math.min(100, Math.round(35 + Math.min(50, commentCount))),
+      emotionalIntensity: dnaEmotion,
       tropes: ['multi-agent arena', 'emergent discourse'],
     },
     personas,
