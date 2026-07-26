@@ -41,9 +41,9 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey });
 }
 
-/** Agent turns: smaller output, prefer cheaper model override OPENAI_ARENA_MODEL */
+/** Agent turns: defaults to flagship; override with OPENAI_ARENA_MODEL */
 function getArenaModel(): string {
-  return (process.env.OPENAI_ARENA_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6').trim();
+  return (process.env.OPENAI_ARENA_MODEL || process.env.OPENAI_MODEL || 'gpt-5.4-pro').trim();
 }
 
 async function generateAgentJson(system: string, user: string): Promise<string> {
@@ -81,27 +81,31 @@ async function finalizeArenaWithDatabricks(state: any, sync = true) {
   return { jsonl, databricks };
 }
 
-/** Flagship default: gpt-5.6 → Sol. Override with OPENAI_MODEL=gpt-5.6-terra|gpt-4.1|etc. */
+/** Flagship default: gpt-5.4-pro. Override with OPENAI_MODEL=gpt-5.4|gpt-5.6|etc. */
 function getRoomModel(): string {
-  return (process.env.OPENAI_MODEL || 'gpt-5.6').trim();
+  return (process.env.OPENAI_MODEL || 'gpt-5.4-pro').trim();
 }
 
-function getReasoningEffort(): 'low' | 'medium' | 'high' {
-  const v = (process.env.OPENAI_REASONING_EFFORT || 'high').trim().toLowerCase();
-  if (v === 'low' || v === 'medium') return v;
-  return 'high';
+function getReasoningEffort(): 'low' | 'medium' | 'high' | 'xhigh' {
+  const v = (process.env.OPENAI_REASONING_EFFORT || 'xhigh').trim().toLowerCase();
+  if (v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh') return v;
+  return 'xhigh';
+}
+
+function usesResponsesReasoning(model: string): boolean {
+  return /^gpt-5/i.test(model) || /^o[1-9]/i.test(model);
 }
 
 /**
- * Run room simulation on GPT-5.6 via Responses API (reasoning + JSON),
+ * Room / insights on flagship via Responses API (reasoning + JSON),
  * with Chat Completions fallback for older model overrides.
  */
 async function generateRoomJson(system: string, user: string): Promise<string> {
   const openai = getOpenAIClient();
   const model = getRoomModel();
-  const isGpt56Family = /^gpt-5\.6/i.test(model) || /^gpt-5(?!\.\d)/i.test(model);
+  const reasoning = usesResponsesReasoning(model);
 
-  if (isGpt56Family && typeof (openai as any).responses?.create === 'function') {
+  if (reasoning && typeof (openai as any).responses?.create === 'function') {
     try {
       const response = await (openai as any).responses.create({
         model,
@@ -111,7 +115,7 @@ async function generateRoomJson(system: string, user: string): Promise<string> {
           { role: 'user', content: user },
         ],
         text: { format: { type: 'json_object' } },
-        max_output_tokens: 12000,
+        max_output_tokens: 16000,
       });
       const text =
         response.output_text ||
@@ -135,9 +139,8 @@ async function generateRoomJson(system: string, user: string): Promise<string> {
       { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    // Older chat models accept temperature; 5.x may ignore or reject — omit for 5.6
-    ...(isGpt56Family ? {} : { temperature: 0.85 }),
-    max_tokens: 12000,
+    ...(reasoning ? {} : { temperature: 0.85 }),
+    max_tokens: 16000,
   } as any);
 
   const content = completion.choices[0]?.message?.content;

@@ -14,8 +14,12 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
-        value: gpt-5.6
+        value: gpt-5.4-pro
+      - key: OPENAI_ARENA_MODEL
+        value: gpt-5.4-pro
       - key: OPENAI_REASONING_EFFORT
+        value: xhigh
+      - key: OPENAI_ARENA_REASONING_EFFORT
         value: high
       - key: ARENA_ISOLATION
         value: inline
