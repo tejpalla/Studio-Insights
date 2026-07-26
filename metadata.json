@@ -1,6 +1,6 @@
 {
-  "name": "Helix - Story Intelligence",
-  "description": "AI-powered pre-publication story analytics and listener retention optimization for audio dramas.",
-  "requestFramePermissions": ["microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "Studio Insights",
+  "description": "Structure, story DNA, simulated listener risk, repetition/confusion checks, and adaptive cuts for audio drama creators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
 }

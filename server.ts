@@ -1,595 +1,920 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type, Modality } from '@google/genai';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { extractStructureFromEpisodes } from './src/lib/scriptGrounding.ts';
+import {
+  REDDIT_ROOM_SYSTEM,
+  buildInsightsUserPrompt,
+} from './src/lib/redditRoomPrompt.ts';
+import { buildEngagementFunnel } from './src/lib/normalizeInsights.ts';
 
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
-// Lazy init Gemini SDK helper
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("GEMINI_API_KEY environment variable is missing.");
-  }
-  return new GoogleGenAI({
-    apiKey: apiKey || '',
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-}
-
-// Lazy init OpenAI SDK helper
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.warn("OPENAI_API_KEY environment variable is missing.");
+    throw new Error('OPENAI_API_KEY is missing. Add it to your .env file.');
   }
-  return new OpenAI({
-    apiKey: apiKey || '',
-  });
+  return new OpenAI({ apiKey });
 }
 
-// 1. Analyze Story API Route
-app.post('/api/analyze-story', async (req, res) => {
+/** Flagship default: gpt-5.6 → Sol. Override with OPENAI_MODEL=gpt-5.6-terra|gpt-4.1|etc. */
+function getRoomModel(): string {
+  return (process.env.OPENAI_MODEL || 'gpt-5.6').trim();
+}
+
+function getReasoningEffort(): 'low' | 'medium' | 'high' {
+  const v = (process.env.OPENAI_REASONING_EFFORT || 'high').trim().toLowerCase();
+  if (v === 'low' || v === 'medium') return v;
+  return 'high';
+}
+
+/**
+ * Run room simulation on GPT-5.6 via Responses API (reasoning + JSON),
+ * with Chat Completions fallback for older model overrides.
+ */
+async function generateRoomJson(system: string, user: string): Promise<string> {
+  const openai = getOpenAIClient();
+  const model = getRoomModel();
+  const isGpt56Family = /^gpt-5\.6/i.test(model) || /^gpt-5(?!\.\d)/i.test(model);
+
+  if (isGpt56Family && typeof (openai as any).responses?.create === 'function') {
+    try {
+      const response = await (openai as any).responses.create({
+        model,
+        reasoning: { effort: getReasoningEffort() },
+        input: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        text: { format: { type: 'json_object' } },
+        max_output_tokens: 12000,
+      });
+      const text =
+        response.output_text ||
+        response.output
+          ?.flatMap((item: any) => item?.content || [])
+          ?.filter((c: any) => c?.type === 'output_text' || c?.text)
+          ?.map((c: any) => c.text || c.output_text || '')
+          ?.join('') ||
+        '';
+      if (text?.trim()) return text;
+      console.warn('Responses API returned empty text — falling back to chat.completions');
+    } catch (err: any) {
+      console.warn('Responses API failed, falling back to chat.completions:', err?.message || err);
+    }
+  }
+
+  const completion = await openai.chat.completions.create({
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    response_format: { type: 'json_object' },
+    // Older chat models accept temperature; 5.x may ignore or reject — omit for 5.6
+    ...(isGpt56Family ? {} : { temperature: 0.85 }),
+    max_tokens: 12000,
+  } as any);
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error('Model returned an empty response.');
+  return content;
+}
+
+const INSIGHTS_SYSTEM = REDDIT_ROOM_SYSTEM;
+
+function coerceRoomComments(raw: unknown): any[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') return Object.values(raw as Record<string, unknown>);
+  return [];
+}
+
+function flattenPostComments(posts: any[]): any[] {
+  const out: any[] = [];
+  for (const p of posts || []) {
+    for (const c of p?.comments || []) out.push(c);
+  }
+  return out;
+}
+
+/** If the model stuffs the thread under one parent, promote meaty replies to top-level. */
+function expandThinThread(comments: any[]): any[] {
+  if (!Array.isArray(comments) || comments.length === 0) return [];
+  if (comments.length >= 4) return comments;
+
+  const out = [...comments];
+  for (const c of comments) {
+    const replies = Array.isArray(c?.replies) ? c.replies : [];
+    if (comments.length <= 2 && replies.length >= 3) {
+      for (let i = 0; i < replies.length; i++) {
+        const r = replies[i];
+        const body = String(r?.body || '').trim();
+        if (body.length < 20) continue;
+        out.push({
+          id: r?.id || `promoted_${c?.id || 'c'}_${i}`,
+          username: r?.username || `reply_user_${i}`,
+          vibe: i % 3 === 0 ? 'mid' : i % 3 === 1 ? 'solid' : 'slop',
+          upvotes: Number(r?.upvotes) || Math.max(3, 40 - i * 5),
+          body,
+          talksAbout: `reply to ${c?.username || 'op'}`,
+          replies: [],
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.min(100, value));
+  if (typeof value === 'string') {
+    const m = value.match(/-?\d+(\.\d+)?/);
+    if (m) return Math.max(0, Math.min(100, Number(m[0])));
+  }
+  return fallback;
+}
+
+function normalizeCharacter(raw: unknown, index: number) {
+  if (typeof raw === 'string' && raw.trim()) {
+    return {
+      name: raw.trim(),
+      role: 'Character',
+      firstAppearsEpisode: 0,
+    };
+  }
+  if (raw && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>;
+    const name = String(o.name || o.username || '').trim();
+    const ep = Number(o.firstAppearsEpisode || o.episode);
+    return {
+      name: name || '',
+      role: String(o.role || o.description || 'Character'),
+      firstAppearsEpisode: Number.isFinite(ep) && ep > 0 ? ep : 0,
+      notes: o.notes ? String(o.notes) : undefined,
+    };
+  }
+  return { name: '', role: 'Character', firstAppearsEpisode: 0 };
+}
+
+function normalizeScene(raw: unknown, index: number) {
+  if (typeof raw === 'string') {
+    return {
+      id: `s${index + 1}`,
+      episodeNumber: 1,
+      order: index + 1,
+      title: raw,
+      summary: raw,
+      charactersPresent: [] as string[],
+    };
+  }
+  if (raw && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>;
+    return {
+      id: String(o.id || `s${index + 1}`),
+      episodeNumber: Number(o.episodeNumber || o.episode || 1) || 1,
+      order: Number(o.order || index + 1) || index + 1,
+      title: String(o.title || o.name || `Scene ${index + 1}`),
+      summary: String(o.summary || o.description || o.title || ''),
+      charactersPresent: Array.isArray(o.charactersPresent)
+        ? o.charactersPresent.map(String)
+        : [],
+    };
+  }
+  return {
+    id: `s${index + 1}`,
+    episodeNumber: 1,
+    order: index + 1,
+    title: `Scene ${index + 1}`,
+    summary: '',
+    charactersPresent: [] as string[],
+  };
+}
+
+function normalizeTimeline(raw: unknown, index: number) {
+  if (typeof raw === 'string') {
+    return { episodeNumber: index + 1, label: raw, summary: raw };
+  }
+  if (raw && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>;
+    return {
+      episodeNumber: Number(o.episodeNumber || index + 1) || index + 1,
+      label: String(o.label || o.title || `Beat ${index + 1}`),
+      summary: String(o.summary || o.description || o.label || ''),
+    };
+  }
+  return { episodeNumber: index + 1, label: `Beat ${index + 1}`, summary: '' };
+}
+
+function normalizePersona(raw: unknown, index: number) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `p${index + 1}`,
+      name: `listener_${index + 1}`,
+      profile: '',
+      quitEpisode: 0,
+      quitScene: '',
+      reason: '',
+      beatExcerpt: '',
+    };
+  }
+  const o = raw as Record<string, unknown>;
+  return {
+    id: String(o.id || `p${index + 1}`),
+    name: String(o.name || o.username || `listener_${index + 1}`),
+    profile: String(o.profile || o.flair || ''),
+    quitEpisode: Number(o.quitEpisode || 0) || 0,
+    quitScene: o.quitScene == null ? '' : String(o.quitScene),
+    reason: String(o.reason || ''),
+    beatExcerpt: String(o.beatExcerpt || ''),
+  };
+}
+
+/** If model skips cut or invents original text, build a script-backed Your call. */
+function ensureCut(
+  cut: any,
+  comments: any[],
+  episodes: Array<{ episodeNumber?: number; title?: string; scriptText?: string }>
+) {
+  if (!episodes.length) return cut && cut.original ? cut : null;
+
+  const scored = scoreDisputedEpisode(comments, episodes);
+  const epIndex = scored.index;
+  const ep = episodes[epIndex];
+  const epNum = Number(ep.episodeNumber) || epIndex + 1;
+  const title = (ep.title || `Episode ${epNum}`).trim();
+  const script = ep.scriptText || '';
+  const excerpt = pickBeatExcerpt(script);
+
+  const consensus =
+    scored.consensus ||
+    (Array.isArray(comments) && comments[0]?.body
+      ? String(comments[0].body).slice(0, 160)
+      : 'The room kept poking at this stretch.');
+
+  const hasUsable =
+    cut &&
+    typeof cut === 'object' &&
+    String(cut.fast || '').trim().length > 40 &&
+    String(cut.detailed || '').trim().length > 40;
+
+  // Prefer real script excerpt as original so Accept can find it in the episode
+  const originalFromModel = String(cut?.original || '').trim();
+  const originalInScript =
+    originalFromModel.length > 60 &&
+    script.replace(/\s+/g, ' ').includes(originalFromModel.replace(/\s+/g, ' ').slice(0, 80));
+  const original = originalInScript ? originalFromModel : excerpt;
+
+  if (hasUsable) {
+    return {
+      episodeNumber: Number(cut.episodeNumber) || epNum,
+      beatLabel: String(cut.beatLabel || title),
+      original,
+      fast: String(cut.fast),
+      detailed: String(cut.detailed),
+      explanation: String(
+        cut.explanation ||
+          'Two alternate takes on the stretch the room argued about — your call, not an order.'
+      ),
+      threadConsensus: String(cut.threadConsensus || consensus),
+    };
+  }
+
+  // Fully local fallback — still gives the writer something to try
+  const fast = tightenBeat(original);
+  const detailed = enrichBeat(original);
+
+  return {
+    episodeNumber: epNum,
+    beatLabel: title,
+    original,
+    fast,
+    detailed,
+    explanation:
+      'Built from the episode the room mentioned most. Tighter vs richer — keep, tweak, or ignore.',
+    threadConsensus: consensus,
+  };
+}
+
+function scoreDisputedEpisode(
+  comments: any[],
+  episodes: Array<{ episodeNumber?: number; title?: string; scriptText?: string }>
+): { index: number; consensus: string } {
+  const scores = episodes.map(() => 0);
+  const snippets: string[] = [];
+
+  for (const c of comments || []) {
+    const blob = `${c?.body || ''} ${c?.talksAbout || ''}`.toLowerCase();
+    const weight = c?.vibe === 'slop' || c?.vibe === 'mid' ? 3 : c?.vibe === 'solid' ? 1 : 0.5;
+    if (c?.vibe === 'mid' || c?.vibe === 'slop') {
+      snippets.push(String(c.body || '').slice(0, 140));
+    }
+    episodes.forEach((ep, i) => {
+      const n = Number(ep.episodeNumber) || i + 1;
+      const title = (ep.title || '').toLowerCase();
+      if (blob.includes(`ep ${n}`) || blob.includes(`ep${n}`) || blob.includes(`episode ${n}`)) {
+        scores[i] += weight * 2;
+      }
+      if (title && title.length > 3 && blob.includes(title.slice(0, Math.min(title.length, 18)))) {
+        scores[i] += weight * 2;
+      }
+      // Character / keyword hits from early script text
+      const hook = (ep.scriptText || '').slice(0, 200).toLowerCase();
+      const words = hook.match(/\b[a-z]{5,}\b/g) || [];
+      for (const w of words.slice(0, 8)) {
+        if (blob.includes(w)) scores[i] += weight * 0.15;
+      }
+    });
+    for (const r of c?.replies || []) {
+      const rb = String(r?.body || '').toLowerCase();
+      episodes.forEach((ep, i) => {
+        const n = Number(ep.episodeNumber) || i + 1;
+        if (rb.includes(`ep ${n}`) || rb.includes(`episode ${n}`)) scores[i] += 1.5;
+      });
+    }
+  }
+
+  let best = 0;
+  for (let i = 1; i < scores.length; i++) {
+    if (scores[i] > scores[best]) best = i;
+  }
+  // Prefer a mid-series episode if everything tied at 0 (more interesting than always Ep1)
+  if (scores[best] === 0 && episodes.length > 2) {
+    best = Math.min(episodes.length - 1, Math.floor(episodes.length / 3));
+  }
+
+  return {
+    index: best,
+    consensus: snippets.filter(Boolean).slice(0, 2).join(' / ') || '',
+  };
+}
+
+function pickBeatExcerpt(script: string): string {
+  const cleaned = script.trim();
+  if (!cleaned) return '[No script text for this episode]';
+
+  // Prefer a dialogue block mid-episode
+  const parts = cleaned.split(/\n\n+/).filter((p) => p.trim().length > 40);
+  let pick = parts[Math.floor(parts.length / 2)] || parts[0] || cleaned.slice(0, 500);
+  if (pick.length < 120 && parts.length > 2) {
+    pick = parts.slice(Math.max(0, Math.floor(parts.length / 2) - 1), Math.floor(parts.length / 2) + 2).join('\n\n');
+  }
+  const out = pick.trim();
+  return out.length > 900 ? out.slice(0, 900) + '…' : out;
+}
+
+function tightenBeat(original: string): string {
+  const lines = original.split('\n').filter((l) => {
+    const t = l.trim();
+    if (!t) return false;
+    if (/^NARRATOR/i.test(t)) return false;
+    if (/^\[SFX:/i.test(t)) return t.length < 60; // keep short sfx, drop long
+    return true;
+  });
+  const body = (lines.length >= 3 ? lines : original.split('\n')).join('\n').trim();
+  const trimmed = body.length > 500 ? body.slice(0, 500) + '\n…' : body;
+  return `${trimmed}\n\n(NARRATOR — tighter)\nSame turn. Less throat-clearing. Land the beat and move.`;
+}
+
+function enrichBeat(original: string): string {
+  return `${original.trim()}
+
+[SFX: A held breath. Something small in the room shifts — a chair, a page, a distant bell.]
+
+(NARRATOR — richer)
+One extra sensory beat. One line of cost on the character's face. Then continue — don't stall the plot.`;
+}
+
+/** Coerce messy LLM JSON into the UI schema. Structure is always parsed from scripts. */
+function normalizeInsightsResult(
+  parsed: any,
+  meta: {
+    seriesId: string;
+    title: string;
+    episodeCount: number;
+    episodes?: Array<{ episodeNumber?: number; title?: string; scriptText?: string }>;
+  }
+) {
+  const comments = expandThinThread(coerceRoomComments(parsed?.room?.comments));
+  const vibeSplit = parsed?.room?.vibeSplit || {
+    masterpiece: comments.filter((c: any) => c?.vibe === 'masterpiece').length,
+    solid: comments.filter((c: any) => c?.vibe === 'solid').length,
+    mid: comments.filter((c: any) => c?.vibe === 'mid').length,
+    slop: comments.filter((c: any) => c?.vibe === 'slop').length,
+  };
+
+  const structureIn = parsed?.structure || {};
+  const dnaIn = parsed?.dna || {};
+  const episodes = Array.isArray(meta.episodes) ? meta.episodes : [];
+  const posts = Array.isArray(parsed?.room?.posts) ? parsed.room.posts : [];
+  const personasRaw = (Array.isArray(parsed?.personas) ? parsed.personas : []).map(normalizePersona);
+  const engagement = buildEngagementFunnel(
+    parsed?.room,
+    posts.map((p: any, i: number) => ({
+      id: String(p?.id || `post${i}`),
+      kind: p?.kind || 'episode_discussion',
+      title: String(p?.title || ''),
+      author: String(p?.author || ''),
+      upvotes: Number(p?.upvotes) || 0,
+      vibe: p?.vibe || 'solid',
+      comments: Array.isArray(p?.comments) ? p.comments : [],
+    })),
+    comments,
+    personasRaw,
+    meta.episodeCount || episodes.length || 8,
+    8
+  );
+
+  // Live runs: structure is 100% script-derived. Demo fixture keeps its authored structure.
+  let structure;
+  if (episodes.length > 0 && !parsed?.isDemoFixture) {
+    const grounding = extractStructureFromEpisodes(episodes);
+    structure = {
+      characters: grounding.characters
+        .map((c, i) => normalizeCharacter(c, i))
+        .filter((c) => c.name),
+      scenes: grounding.scenes.map((s, i) => normalizeScene(s, i)),
+      timeline: grounding.timeline.map((t, i) => normalizeTimeline(t, i)),
+    };
+  } else {
+    structure = {
+      characters: (Array.isArray(structureIn.characters) ? structureIn.characters : []).map(
+        normalizeCharacter
+      ),
+      scenes: (Array.isArray(structureIn.scenes) ? structureIn.scenes : []).map(normalizeScene),
+      timeline: (Array.isArray(structureIn.timeline) ? structureIn.timeline : []).map(
+        normalizeTimeline
+      ),
+    };
+  }
+
+  return {
+    ...parsed,
+    seriesId: meta.seriesId,
+    title: meta.title,
+    isDemoFixture: Boolean(parsed?.isDemoFixture),
+    room: {
+      subreddit: parsed?.room?.subreddit || 'r/AudioDrama',
+      tagline: parsed?.room?.tagline || meta.title,
+      audienceSize: engagement.audienceSize,
+      roomVibe: parsed?.room?.roomVibe || 'solid',
+      vibeSplit,
+      hotTakes: Array.isArray(parsed?.room?.hotTakes) ? parsed.room.hotTakes.map(String) : [],
+      posts,
+      comments,
+      engagement,
+    },
+    structure,
+    dna: {
+      summary: String(dnaIn.summary || ''),
+      pacing: asNumber(dnaIn.pacing, 50),
+      suspense: asNumber(dnaIn.suspense, 50),
+      romance: asNumber(dnaIn.romance, 20),
+      conflict: asNumber(dnaIn.conflict, 50),
+      dialogueDensity: asNumber(dnaIn.dialogueDensity, 50),
+      emotionalIntensity: asNumber(dnaIn.emotionalIntensity, 50),
+      tropes: Array.isArray(dnaIn.tropes) ? dnaIn.tropes.map(String) : [],
+    },
+    personas: personasRaw,
+    repetition: parsed?.repetition ?? null,
+    confusion: parsed?.confusion ?? null,
+    cut: ensureCut(parsed?.cut, comments, episodes),
+    dropOff: parsed?.dropOff ?? null,
+  };
+}
+
+function harborWardDemoFixture(seriesId: string, title: string) {
+  return {
+    seriesId,
+    title,
+    isDemoFixture: true,
+    room: {
+      subreddit: 'r/AudioDrama',
+      tagline: 'Harbor Ward — bracelet hook is elite, then the loop starts smelling like recycled plot',
+      audienceSize: 248,
+      roomVibe: 'mid' as const,
+      vibeSplit: { masterpiece: 2, solid: 3, mid: 5, slop: 2 },
+      hotTakes: [
+        'Ep1 bracelet? I stood up on the metro.',
+        'If I see that ER dump one more time I’m uninstalling.',
+        'Ep4 name-dump is textbook mid: busy, not deep.',
+      ],
+      comments: [
+        {
+          id: 'c1',
+          username: 'nightshift_lurker',
+          flair: 'binge brain',
+          vibe: 'solid' as const,
+          upvotes: 412,
+          body: "Okay but that bracelet in Bay 3? That's the kind of cold open that makes me cancel sleep. Mira feels real. Lena being mostly off-page actually works — absence as pressure. Then Pier 9 happens… twice… and I can feel my brain saying 'I already know this song.'",
+          talksAbout: 'Strong open vs looping middle',
+          replies: [
+            {
+              id: 'r1',
+              username: 'sfx_snob',
+              body: 'The siren + fluorescent hum sold me harder than half the dialogue. Audio people ate.',
+              upvotes: 89,
+            },
+          ],
+        },
+        {
+          id: 'c2',
+          username: 'PlotAllergy',
+          flair: 'hates filler',
+          vibe: 'slop' as const,
+          upvotes: 867,
+          body: "kidnap → chase → dumped at Harbor. Again. That's not a motif, that's a copy-paste. Mediocre serials do this when they run out of moves. I'm not mad at Mira — I'm mad that the story thinks I won't notice.",
+          talksAbout: 'Repetition as lazy craft',
+        },
+        {
+          id: 'c3',
+          username: 'cast_list_karen',
+          vibe: 'mid' as const,
+          upvotes: 530,
+          body: "Ep4 walked three full government-sounding names into Trauma 2 and expected me to care. Anika / Jay / Rafael / Calder — I don't hate twists, I hate being briefed like a Wikipedia dump mid-scene. That's how you get 'mid' instead of 'tense'.",
+          talksAbout: 'Confusion / too many new names',
+          replies: [
+            {
+              id: 'r2',
+              username: 'nightshift_lurker',
+              body: 'Yeah I rewound thinking I missed an earlier scene. I hadn’t.',
+              upvotes: 120,
+            },
+          ],
+        },
+        {
+          id: 'c4',
+          username: 'soft_for_sisters',
+          flair: 'family drama enjoyer',
+          vibe: 'masterpiece' as const,
+          upvotes: 221,
+          body: "When it trusts the sister wound, it's almost great. The bracelet charm scratch detail? Tiny, human, not AI-slop vibes. Protect that instinct. Burn the corridor coffee chat.",
+          talksAbout: 'Emotional core that works',
+        },
+        {
+          id: 'c5',
+          username: 'OvertimeGreg',
+          vibe: 'slop' as const,
+          upvotes: 701,
+          body: "Lena is MISSING and they're talking schedules and overtime?? Absolute hat-slop energy. Soft piano in the waiting room while the plot naps. I said 'this is mid' out loud on the bus.",
+          talksAbout: 'Paused conflict / filler beat',
+        },
+        {
+          id: 'c6',
+          username: 'serial_apologist',
+          flair: 'gives 2nd chances',
+          vibe: 'solid' as const,
+          upvotes: 156,
+          body: "I'll defend Ep2 stranger — 'don't trust the night supervisor' is a clean question. The show earns trust early. It spends it on loops later. Still not trash. Just… choose a lane.",
+          talksAbout: 'Early promise vs later waste',
+        },
+        {
+          id: 'c7',
+          username: 'u/ActuallyFinishedIt',
+          vibe: 'mid' as const,
+          upvotes: 333,
+          body: "Overall vibe: promising pilot energy trapped in a recycled second act. Not a masterpiece. Not unlistenably bad. Classic mid — and this sub can smell mid from a mile away.",
+          talksAbout: 'Whole-series grade',
+        },
+        {
+          id: 'c8',
+          username: 'BinderStreetTruthers',
+          vibe: 'solid' as const,
+          upvotes: 98,
+          body: "Cold storage shoe hit harder than the second van abduction. Physical evidence > rinse-repeat set pieces. More Binder Street, less 'somehow we're back at the ER'.",
+          talksAbout: 'Which locations feel earned',
+        },
+        {
+          id: 'c9',
+          username: 'no_notes_bot',
+          flair: 'rare praise',
+          vibe: 'masterpiece' as const,
+          upvotes: 64,
+          body: "Unpopular: if they commit to the conspiracy inside the hospital instead of looping Mira like a GPS reset, this could go from mid → something people recommend with their chest.",
+          talksAbout: 'Potential if craft sharpens',
+        },
+        {
+          id: 'c10',
+          username: 'HateWatchHost',
+          vibe: 'mid' as const,
+          upvotes: 445,
+          body: "We don't need an AI to circle the bad lines. The room already did: bracelet good, name dump mid, loop slop, coffee chat criminal. Writer's call what to keep. We're just the loud neighbors.",
+          talksAbout: 'Room consensus without orders',
+        },
+      ],
+    },
+    structure: {
+      characters: [
+        { name: 'Mira Kade', role: 'Protagonist / night-shift nurse', firstAppearsEpisode: 1 },
+        { name: 'Lena Kade', role: 'Missing sister', firstAppearsEpisode: 1, notes: 'Mostly off-page' },
+        { name: 'Night Supervisor', role: 'Hospital authority', firstAppearsEpisode: 2 },
+        { name: 'Dr. Anika Rao', role: 'Sudden antagonist?', firstAppearsEpisode: 4 },
+        { name: 'Officer Jay Velasquez', role: 'Sudden ally/threat?', firstAppearsEpisode: 4 },
+        { name: 'Rafael Soto', role: 'Driver / informant', firstAppearsEpisode: 4 },
+      ],
+      scenes: [
+        {
+          id: 's1',
+          episodeNumber: 1,
+          order: 1,
+          title: 'Bracelet discovery',
+          summary: 'Mira finds Lena’s bracelet in Bay 3.',
+          charactersPresent: ['Mira Kade', 'Orderly'],
+        },
+        {
+          id: 's3',
+          episodeNumber: 3,
+          order: 1,
+          title: 'Pier 9 abduction loop',
+          summary: 'Kidnap, chase, dumped at ER.',
+          charactersPresent: ['Mira Kade', 'ER Doctor'],
+        },
+        {
+          id: 's4',
+          episodeNumber: 4,
+          order: 1,
+          title: 'Trauma 2 confrontation',
+          summary: 'Three strangers dump plot on Mira at once.',
+          charactersPresent: ['Mira Kade', 'Dr. Anika Rao', 'Officer Jay Velasquez', 'Rafael Soto'],
+        },
+        {
+          id: 's5',
+          episodeNumber: 5,
+          order: 2,
+          title: 'Corridor pause',
+          summary: 'Conflict stops for coffee and overtime talk.',
+          charactersPresent: ['Mira Kade', 'Night Supervisor'],
+        },
+      ],
+      timeline: [
+        { episodeNumber: 1, label: 'Inciting object', summary: 'Bracelet proves Lena is still reachable.' },
+        { episodeNumber: 3, label: 'Loop establishes', summary: 'Kidnap → chase → hospital becomes the pattern.' },
+        { episodeNumber: 4, label: 'Name dump', summary: 'Anika, Jay, Rafael arrive without grounding.' },
+        { episodeNumber: 5, label: 'Stakes stall', summary: 'Same loop, then a soft corridor beat.' },
+      ],
+    },
+    dna: {
+      summary:
+        'Hooks hard on a sister wound, then risks sounding mid when the abduction loop and a soft corridor chat drain heat.',
+      pacing: 58,
+      suspense: 72,
+      romance: 12,
+      conflict: 64,
+      dialogueDensity: 70,
+      emotionalIntensity: 68,
+      tropes: ['Missing sibling', 'Hospital noir', 'Conspiracy drip', 'Abduction loop'],
+    },
+    personas: [
+      {
+        id: 'p1',
+        name: 'PlotAllergy',
+        profile: 'Quits the second a loop teaches nothing new.',
+        quitEpisode: 5,
+        quitScene: 'ER dump reprise',
+        reason: 'Recognizes the same kidnap–chase–hospital arc.',
+        beatExcerpt: 'Somehow — Harbor’s ER doors.',
+      },
+      {
+        id: 'p2',
+        name: 'cast_list_karen',
+        profile: 'Tracks names; hates briefing scenes.',
+        quitEpisode: 4,
+        quitScene: 'Trauma 2',
+        reason: 'Three new names arrive together.',
+        beatExcerpt: 'Three people she has never heard of stand over her bed',
+      },
+      {
+        id: 'p3',
+        name: 'OvertimeGreg',
+        profile: 'Needs stakes every minute.',
+        quitEpisode: 5,
+        quitScene: 'Corridor coffee',
+        reason: 'Conflict pauses while Lena is missing.',
+        beatExcerpt: 'They talk about schedules. About overtime.',
+      },
+      {
+        id: 'p4',
+        name: 'sfx_snob',
+        profile: 'Follows audio urgency.',
+        quitEpisode: 5,
+        quitScene: 'Waiting-room piano',
+        reason: 'Soft piano replaces pursuit energy.',
+        beatExcerpt: '[SFX: Soft piano from the waiting room TV]',
+      },
+      {
+        id: 'p5',
+        name: 'serial_apologist',
+        profile: 'Defends shows that ask one clear question.',
+        quitEpisode: 3,
+        quitScene: 'Pier 9 return',
+        reason: 'Ends on same loop, no new answer.',
+        beatExcerpt: 'Same loop: taken, chased, returned to the ward.',
+      },
+    ],
+    repetition: {
+      pattern: 'Kidnap → chase → dumped at Harbor ER',
+      episodeNumbers: [3, 5],
+      whyItHurts: 'The room treats it as recycled plot — mediocre craft signal.',
+      examples: [
+        'Ep 3: Pier 9 van → chase → Trauma bay',
+        'Ep 5: Binder Street van → chase → Harbor ER again',
+      ],
+    },
+    confusion: {
+      episodeNumber: 4,
+      scene: 'Trauma 2 bedside',
+      reason: 'Too many new names and conspiracy nouns in one bedside briefing.',
+      newCharactersIntroduced: ['Dr. Anika Rao', 'Officer Jay Velasquez', 'Rafael Soto'],
+      excerpt: 'Anika / Jay / Rafael / Calder arrive without grounding.',
+    },
+    cut: {
+      episodeNumber: 5,
+      beatLabel: 'Corridor stretch the room keeps roasting',
+      threadConsensus:
+        'The thread isn’t telling you what to write — they’re arguing that this stretch feels like the story took a smoke break while Lena is still missing. Your call.',
+      original: `NARRATOR:
+In the corridor, Mira stops. The night supervisor offers coffee. They talk about schedules. About overtime. About nothing that matters while Lena is still missing.
+
+MIRA:
+"I don't know if I can keep running this loop."
+
+NIGHT SUPERVISOR:
+"Then rest. We'll file another incident report in the morning."
+
+[SFX: Clock tick, distant code blue]
+
+NARRATOR:
+Conflict pauses. No push. No reveal. The episode floats while the kidnap–chase–hospital pattern waits to repeat.`,
+      fast: `NARRATOR:
+In the corridor, the night supervisor blocks Mira with a paper cup.
+
+NIGHT SUPERVISOR:
+"Incident report tomorrow. Go home."
+
+MIRA:
+"Binder Street. Cold storage. If I wait until morning, Lena doesn't."
+
+[SFX: Cup hits tile. Mira's footsteps — already leaving.]`,
+      detailed: `NARRATOR:
+In the corridor, Mira stops under the exit sign. The night supervisor offers coffee like a truce.
+
+NIGHT SUPERVISOR:
+"You've filed three incident reports this week. Rest. We'll handle Binder Street in daylight."
+
+MIRA:
+"Daylight is when Calder's people move the vans. Lena's shoe was still cold. Someone in this hospital signed those diversion forms."
+
+NIGHT SUPERVISOR (too careful):
+"You shouldn't say that name out loud."
+
+[SFX: Soft piano from the waiting room TV — then Mira kills the volume with her palm]
+
+MIRA:
+"Then stop offering coffee. Unlock the staff lot. I'm going back tonight — and if you tip them off, I'll know which door you use."`,
+      explanation:
+        'Two directions the room might calm down about — still your story. Fast = motion. Detailed = complicity heat.',
+    },
+    dropOff: null,
+  };
+}
+
+app.post('/api/insights', async (req, res) => {
   try {
-    const { title, genre, targetAudience, episodes } = req.body;
+    const { title, genre, targetAudience, episodes, seriesId, useDemoFixture } = req.body;
 
     if (!episodes || !Array.isArray(episodes) || episodes.length === 0) {
       return res.status(400).json({ error: 'At least one episode script is required.' });
     }
 
-    const hasGemini = Boolean(process.env.GEMINI_API_KEY);
-    const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
-    const ai = hasGemini ? getGeminiClient() : null;
-
-    const fullScriptCombined = episodes
-      .map(
-        (ep: any) =>
-          `=== EPISODE ${ep.episodeNumber || 1}: ${ep.title || 'Untitled'} ===\n${
-            ep.scriptText || ep.text || ''
-          }`
-      )
-      .join('\n\n');
-
-    const prompt = `You are Pocket FM's Chief Story Intelligence & Listener Retention AI Specialist.
-Analyze the following audio story script (optimized for bite-sized serial audio drama format with audio SFX, dialogue, narrator hooks, emotional twists, and cliffhangers).
-
-Story Title: "${title || 'Untitled Story'}"
-Intended Genre: "${genre || 'Serial Drama'}"
-Target Audience: "${targetAudience || 'General Audio Drama Listeners'}"
-
-Script Content:
-${fullScriptCombined}
-
-Provide a comprehensive, highly accurate, data-driven pre-publication analysis of this story script.
-Return JSON strictly adhering to the specified schema:
-- overallScore: 0-100 integer evaluating commercial & storytelling quality
-- commercialViability: "S Tier" | "A Tier" | "B Tier" | "C Tier"
-- predictedCompletionRate: 0-100 integer predicting 5-episode listener retention rate
-- executiveSummary: Concise 3-4 sentence evaluation highlighting strengths, key hook, and biggest risk.
-- genome:
-  - primaryGenre: main genre string
-  - genreBlend: array of { name: string, percentage: number (summing to 100) }
-  - emotionalIntensity: 0-100
-  - pacingVelocity: 0-100
-  - dialogueDensity: 0-100
-  - suspenseIndex: 0-100
-  - romanceIndex: 0-100
-  - actionScale: 0-100
-  - humorRating: 0-100
-  - hookStrength: 0-100
-  - detectedTropes: array of 3-6 tropes identified (e.g. "Secret Heir", "Revenge Arc", "System Awakening")
-  - archetype: e.g. "High-Stakes Romance Thriller"
-- hookAnalysis:
-  - score: 0-100 hook strength score
-  - hookTimeframe: e.g. "0-45 seconds"
-  - verdict: "Exceptional" | "Engaging" | "Moderate" | "Weak"
-  - strengths: array of 2-3 specific opening hook strengths
-  - weaknesses: array of 1-3 specific opening hook flaws or risks
-  - suggestedOpeningHook: concrete revised 2-3 sentence punchy audio opening script snippet (with SFX callouts) that grabs listeners in under 15 seconds.
-- retentionCurve: array of 5-8 chronological time/scene points tracking listener drop-off prediction across the script:
-  - timestamp: e.g. "0:15", "0:45", "1:30", "2:15", "3:00"
-  - retentionPercent: 0-100 forecasted retention
-  - riskLevel: "optimal" | "low" | "medium" | "high"
-  - reason: explanation of why listeners stay or drop off here
-  - suggestedFix: actionable script tweak if risk is medium/high
-  - sceneExcerpt: relevant 1-line quote or SFX from this moment
-- emotionalTimeline: array of 5-8 points charting the emotional arc:
-  - timestamp: e.g. "0:30"
-  - sceneNumber: integer
-  - dominantEmotion: e.g. "Tension", "Betrayal", "Joy", "Suspense", "Heartbreak"
-  - intensity: 0-100
-  - valence: integer from -100 (extreme negative/conflict) to +100 (extreme positive/triumph)
-  - description: brief moment description
-- issues: array of detected plot holes, character inconsistencies, slow exposition, repetitive phrases, weak cliffhangers, or continuity glitches:
-  - id: unique string e.g. "issue-1"
-  - type: "plot_hole" | "character_inconsistency" | "repetitive_dialogue" | "pacing_drop" | "weak_cliffhanger" | "continuity_error"
-  - severity: "critical" | "major" | "minor"
-  - title: clear title
-  - location: e.g. "Episode 1, Scene 2"
-  - description: detailed breakdown of why this hurts retention
-  - suggestedResolution: clear fix instructions
-  - beforeScriptSnippet: exact flaw script snippet
-  - afterScriptSnippet: AI rewritten optimized snippet
-- benchmark: array of 4 benchmark comparisons vs top-performing Pocket FM serials:
-  - metricName: e.g. "30s Hook Retention", "Episode 1 Cliffhanger Strength", "Pacing & Dialogue Rhythm", "Emotional Surge Frequency"
-  - currentScore: 0-100 score
-  - platformTop10Avg: 0-100 score (e.g. 88, 92)
-  - status: "above_average" | "average" | "needs_improvement"
-- episodesAnalyses: array per episode:
-  - episodeNumber: integer
-  - title: string
-  - cliffhangerScore: 0-100
-  - summary: 1-2 sentence overview
-  - keyStrengths: key narrative strength
-  - keyWeaknesses: key area to improve
-`;
-
-    const responseSchema = {
-      type: Type.OBJECT,
-      properties: {
-        overallScore: { type: Type.INTEGER },
-        commercialViability: { type: Type.STRING },
-        predictedCompletionRate: { type: Type.INTEGER },
-        executiveSummary: { type: Type.STRING },
-        genome: {
-          type: Type.OBJECT,
-          properties: {
-            primaryGenre: { type: Type.STRING },
-            genreBlend: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  percentage: { type: Type.INTEGER },
-                },
-              },
-            },
-            emotionalIntensity: { type: Type.INTEGER },
-            pacingVelocity: { type: Type.INTEGER },
-            dialogueDensity: { type: Type.INTEGER },
-            suspenseIndex: { type: Type.INTEGER },
-            romanceIndex: { type: Type.INTEGER },
-            actionScale: { type: Type.INTEGER },
-            humorRating: { type: Type.INTEGER },
-            hookStrength: { type: Type.INTEGER },
-            detectedTropes: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-            },
-            archetype: { type: Type.STRING },
-          },
-        },
-        hookAnalysis: {
-          type: Type.OBJECT,
-          properties: {
-            score: { type: Type.INTEGER },
-            hookTimeframe: { type: Type.STRING },
-            verdict: { type: Type.STRING },
-            strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-            weaknesses: { type: Type.ARRAY, items: { type: Type.STRING } },
-            suggestedOpeningHook: { type: Type.STRING },
-          },
-        },
-        retentionCurve: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              timestamp: { type: Type.STRING },
-              retentionPercent: { type: Type.INTEGER },
-              riskLevel: { type: Type.STRING },
-              reason: { type: Type.STRING },
-              suggestedFix: { type: Type.STRING },
-              sceneExcerpt: { type: Type.STRING },
-            },
-          },
-        },
-        emotionalTimeline: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              timestamp: { type: Type.STRING },
-              sceneNumber: { type: Type.INTEGER },
-              dominantEmotion: { type: Type.STRING },
-              intensity: { type: Type.INTEGER },
-              valence: { type: Type.INTEGER },
-              description: { type: Type.STRING },
-            },
-          },
-        },
-        issues: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              type: { type: Type.STRING },
-              severity: { type: Type.STRING },
-              title: { type: Type.STRING },
-              location: { type: Type.STRING },
-              description: { type: Type.STRING },
-              suggestedResolution: { type: Type.STRING },
-              beforeScriptSnippet: { type: Type.STRING },
-              afterScriptSnippet: { type: Type.STRING },
-            },
-          },
-        },
-        benchmark: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              metricName: { type: Type.STRING },
-              currentScore: { type: Type.INTEGER },
-              platformTop10Avg: { type: Type.INTEGER },
-              status: { type: Type.STRING },
-            },
-          },
-        },
-        episodesAnalyses: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              episodeNumber: { type: Type.INTEGER },
-              title: { type: Type.STRING },
-              cliffhangerScore: { type: Type.INTEGER },
-              summary: { type: Type.STRING },
-              keyStrengths: { type: Type.STRING },
-              keyWeaknesses: { type: Type.STRING },
-            },
-          },
-        },
-      },
-    };
-
-    const requestedModel = req.body.model || 'gpt-4o-mini';
-    let result: any = null;
-    let lastError: any = null;
-
-    if (requestedModel.startsWith('gpt-') || requestedModel.startsWith('o1-') || requestedModel.startsWith('o3-')) {
-      try {
-        const openai = getOpenAIClient();
-        const completion = await openai.chat.completions.create({
-          model: requestedModel,
-          messages: [
-            { role: 'system', content: 'You are Pocket FM\'s Chief Story Intelligence & Listener Retention AI Specialist. Return valid JSON matching the requested schema.' },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.2
+    if (useDemoFixture) {
+      if (seriesId && seriesId !== 'demo-harbor-ward') {
+        return res.status(400).json({
+          error: 'Labeled demo fixture only works with the Harbor Ward demo series.',
         });
-        const contentText = completion.choices[0]?.message?.content;
-        if (contentText) {
-          result = { text: contentText };
-        }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`OpenAI model ${requestedModel} failed:`, err?.message || err);
       }
+      const fixture = harborWardDemoFixture(seriesId || 'demo-harbor-ward', title || 'Harbor Ward');
+      return res.json(
+        normalizeInsightsResult(fixture, {
+          seriesId: fixture.seriesId,
+          title: fixture.title,
+          episodeCount: episodes.length,
+          episodes,
+        })
+      );
     }
 
-    // Prefer OpenAI when available and Gemini key is missing (or after Gemini path fails)
-    if ((!result || !result.text) && hasOpenAI && (!hasGemini || requestedModel.startsWith('gpt-') || requestedModel.startsWith('o1-') || requestedModel.startsWith('o3-'))) {
-      try {
-        const openai = getOpenAIClient();
-        const openaiModel = requestedModel.startsWith('gpt-') || requestedModel.startsWith('o1-') || requestedModel.startsWith('o3-')
-          ? requestedModel
-          : 'gpt-4o-mini';
-        const completion = await openai.chat.completions.create({
-          model: openaiModel,
-          messages: [
-            { role: 'system', content: 'You are Pocket FM\'s Chief Story Intelligence & Listener Retention AI Specialist. Return valid JSON matching the requested schema.' },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.2
-        });
-        const contentText = completion.choices[0]?.message?.content;
-        if (contentText) {
-          result = { text: contentText };
-        }
-      } catch (err: any) {
-        lastError = err;
-        console.warn('OpenAI analyze failed:', err?.message || err);
-      }
-    }
-
-    if ((!result || !result.text) && hasGemini && ai) {
-      const candidateModels = [
-        requestedModel.startsWith('gpt-') ? 'gemini-2.5-flash' : requestedModel,
-        'gemini-2.5-flash',
-        'gemini-2.5-pro'
-      ];
-
-      for (const m of candidateModels) {
-        try {
-          result = await ai.models.generateContent({
-            model: m,
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: responseSchema as any,
-              temperature: 0.2,
-            },
-          });
-          if (result && result.text) {
-            break;
-          }
-        } catch (err: any) {
-          lastError = err;
-          console.warn(`Model ${m} failed (likely rate limit/quota), trying next model...`, err?.message || err);
-        }
-      }
-    }
-
-    // Final OpenAI fallback if Gemini path exhausted
-    if ((!result || !result.text) && hasOpenAI) {
-      try {
-        const openai = getOpenAIClient();
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are Pocket FM\'s Chief Story Intelligence & Listener Retention AI Specialist. Return valid JSON matching the requested schema.' },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.2
-        });
-        const contentText = completion.choices[0]?.message?.content;
-        if (contentText) {
-          result = { text: contentText };
-        }
-      } catch (err: any) {
-        lastError = err;
-        console.warn('OpenAI fallback failed:', err?.message || err);
-      }
-    }
-
-    if (!result || !result.text) {
-      throw lastError || new Error('All model candidates exhausted or failed quota limits.');
-    }
-
-    const parsedData = JSON.parse(result.text || '{}');
-    parsedData.storyId = req.body.storyId || 'story-' + Date.now();
-    parsedData.title = title || 'Untitled Story';
-
-    res.json(parsedData);
-  } catch (error: any) {
-    console.error('Analysis error (falling back to intelligent mock analysis due to quota/rate-limit):', error);
-    
-    // Fallback intelligence response so app never breaks on 429 quota limits
-    const fallbackTitle = req.body.title || 'Untitled Story';
-    const fallbackGenre = req.body.genre || 'Serial Drama';
-    const numEpisodes = req.body.episodes?.length || 1;
-
-    const fallbackData = {
-      storyId: req.body.storyId || 'story-' + Date.now(),
-      title: fallbackTitle,
-      overallScore: 88,
-      commercialViability: 'S Tier',
-      predictedCompletionRate: 82,
-      executiveSummary: `"${fallbackTitle}" demonstrates strong commercial viability in the ${fallbackGenre} category. The opening hook establishes immediate emotional stakes, though pacing in the middle exposition blocks requires tightening to retain top-tier serial audience engagement.`,
-      genome: {
-        primaryGenre: fallbackGenre,
-        genreBlend: [
-          { name: fallbackGenre, percentage: 65 },
-          { name: 'Suspense & Drama', percentage: 35 }
-        ],
-        emotionalIntensity: 84,
-        pacingVelocity: 78,
-        dialogueDensity: 82,
-        suspenseIndex: 88,
-        romanceIndex: 70,
-        actionScale: 75,
-        humorRating: 40,
-        hookStrength: 91,
-        detectedTropes: ['High Stakes Betrayal', 'Hidden Identity', 'Audible Cliffhanger', 'Emotional Redemption'],
-        archetype: 'Premium Serial Audio Thriller'
-      },
-      hookAnalysis: {
-        score: 91,
-        hookTimeframe: '0-30 seconds',
-        verdict: 'Exceptional',
-        strengths: [
-          'Immediate physical threat established in opening 10 seconds',
-          'Sharp audio SFX cue draws listener focus instantly',
-          'Strong unanswered question posed to listener'
-        ],
-        weaknesses: [
-          'Slight exposition delay around second 25'
-        ],
-        suggestedOpeningHook: '[SFX: Sudden glass shatter & muffled sirens]\nNARRATOR: "She swore she would never return to this city—until the envelope arrived with her dead father\'s wedding ring."'
-      },
-      retentionCurve: [
-        { timestamp: '0:15', retentionPercent: 96, riskLevel: 'optimal', reason: 'High-impact opening audio hook and immediate conflict.', suggestedFix: 'Keep as is.', sceneExcerpt: '[SFX: Glass shatter]' },
-        { timestamp: '0:45', retentionPercent: 88, riskLevel: 'optimal', reason: 'Character confrontation raises emotional stakes.', suggestedFix: 'Tighten dialogue response.', sceneExcerpt: '"You were never supposed to find this ledger."' },
-        { timestamp: '1:30', retentionPercent: 74, riskLevel: 'medium', reason: 'Exposition lull in narrative background description.', suggestedFix: 'Inject a sudden interruption SFX or secret reveal.', sceneExcerpt: 'He explained the history of the estate...' },
-        { timestamp: '2:15', retentionPercent: 82, riskLevel: 'optimal', reason: 'Unexpected phone call twist re-engages audience.', suggestedFix: 'Maintain current pacing.', sceneExcerpt: '"The caller ID... it was calling from inside the house."' },
-        { timestamp: '3:00', retentionPercent: 68, riskLevel: 'high', reason: 'Scene transition drags before episode cliffhanger.', suggestedFix: 'Cut straight to confrontation dialogue.', sceneExcerpt: 'She walked down the long corridor...' },
-        { timestamp: '4:00', retentionPercent: 85, riskLevel: 'optimal', reason: 'Powerful episode 1 cliffhanger surge.', suggestedFix: 'Perfect tension spike.', sceneExcerpt: '"Open the door, or your sister dies tonight."' }
-      ],
-      emotionalTimeline: [
-        { timestamp: '0:30', sceneNumber: 1, dominantEmotion: 'Shock', intensity: 90, valence: -60, description: 'Opening revelation shatters protagonist status quo.' },
-        { timestamp: '1:15', sceneNumber: 1, dominantEmotion: 'Suspense', intensity: 75, valence: -20, description: 'Secret investigation in the shadowed office.' },
-        { timestamp: '2:00', sceneNumber: 2, dominantEmotion: 'Anger', intensity: 85, valence: -80, description: 'Confrontation with the primary antagonist.' },
-        { timestamp: '3:00', sceneNumber: 2, dominantEmotion: 'Hope', intensity: 65, valence: 40, description: 'Discovery of hidden evidence or key ally.' },
-        { timestamp: '4:00', sceneNumber: numEpisodes, dominantEmotion: 'Cliffhanger', intensity: 98, valence: -40, description: 'Unresolved life-or-death ultimatum.' }
-      ],
-      issues: [
-        {
-          id: 'issue-1',
-          type: 'pacing_drop',
-          severity: 'major',
-          title: 'Exposition Lull Before Scene 2',
-          location: 'Episode 1, Minute 1:30',
-          description: 'Narrator background explanation slows down serial momentum right after a high-tension opening hook.',
-          suggestedResolution: 'Convert exposition into active dialogue between the protagonist and a skeptical confidant.',
-          beforeScriptSnippet: 'He explained the history of the family trust and how the lawyers handled the estate over 20 years.',
-          afterScriptSnippet: '"Twenty years of hiding that trust," she whispered, slamming the dossier down. "And you kept quiet?"'
-        },
-        {
-          id: 'issue-2',
-          type: 'weak_cliffhanger',
-          severity: 'minor',
-          title: 'Mid-Episode Resolution Too Rapid',
-          location: 'Episode 1, Minute 2:45',
-          description: 'The confrontation resolves too quickly without lingering emotional resonance.',
-          suggestedResolution: 'Leave the antagonist\'s threat hanging with an unanswered question or sudden alarm.',
-          beforeScriptSnippet: 'He nodded and walked out of the room, leaving her alone.',
-          afterScriptSnippet: 'He smiled coldly at the doorway. "Look outside your window." [SFX: Car horn & screeching tires]'
-        }
-      ],
-      benchmark: [
-        { metricName: '30s Hook Retention', currentScore: 92, platformTop10Avg: 88, status: 'above_average' },
-        { metricName: 'Episode 1 Cliffhanger', currentScore: 88, platformTop10Avg: 90, status: 'average' },
-        { metricName: 'Pacing & Dialogue Rhythm', currentScore: 78, platformTop10Avg: 85, status: 'needs_improvement' },
-        { metricName: 'Emotional Surge Frequency', currentScore: 86, platformTop10Avg: 82, status: 'above_average' }
-      ],
-      episodesAnalyses: Array.from({ length: numEpisodes }, (_, i) => ({
-        episodeNumber: i + 1,
-        title: `Episode ${i + 1} Analysis`,
-        cliffhangerScore: 85 + (i * 2) % 15,
-        summary: `Episode ${i + 1} maintains solid serial engagement with a strong narrative arc and audio cues.`,
-        keyStrengths: 'Fast narrative progression and crisp dialogue rhythm.',
-        keyWeaknesses: 'Mid-episode exposition could be compressed for higher retention.'
-      }))
-    };
-
-    res.json(fallbackData);
-  }
-});
-
-// 2. Rewrite Scene Endpoint
-app.post('/api/rewrite-scene', async (req, res) => {
-  try {
-    const { scriptSnippet, issueDescription, instruction, model = 'gemini-2.5-flash' } = req.body;
-
-    if (!scriptSnippet || !scriptSnippet.trim()) {
-      return res.status(400).json({ error: 'A script snippet is required.' });
-    }
-
-    const prompt = `You are a world-class audio drama script doctor for serial platforms like Pocket FM.
-Rewrite the following audio script snippet to maximize listener retention, emotional tension, dialogue punchiness, and SFX atmosphere.
-
-Original Snippet:
-"""
-${scriptSnippet}
-"""
-
-Issue / Goal:
-${issueDescription || 'Optimize dialogue and audio hook'}
-
-Special Creator Instructions:
-${instruction || 'Make it high-stakes and punchy for audio audio-first format'}
-
-Return JSON strictly adhering to schema:
-- improvedSnippet: string (the fully formatted audio script snippet with character names, SFX bracket callouts, and dramatic pacing)
-- explanation: string (2 sentence explanation of changes made)
-- estimatedRetentionGain: string (e.g. "+14% retention at 01:15")
-`;
-
-    if (model.startsWith('gpt-') || model.startsWith('o1-') || model.startsWith('o3-')) {
-      const openai = getOpenAIClient();
-      const completion = await openai.chat.completions.create({
-        model,
-        messages: [
-          { role: 'system', content: 'You are a world-class audio drama script doctor. Return valid JSON matching the requested schema.' },
-          { role: 'user', content: prompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({
+        error:
+          'OPENAI_API_KEY missing. Add it to .env, or open Harbor Ward and use the labeled demo fixture.',
       });
-      const content = completion.choices[0]?.message?.content;
-      if (!content) throw new Error('OpenAI returned an empty rewrite.');
-      return res.json(JSON.parse(content));
     }
 
-    const ai = getGeminiClient();
-    const result = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            improvedSnippet: { type: Type.STRING },
-            explanation: { type: Type.STRING },
-            estimatedRetentionGain: { type: Type.STRING },
-          },
-        },
-      },
-    });
+    const { prompt: userPrompt, targetComments, targetPosts } = buildInsightsUserPrompt(req.body);
+    console.log(
+      `Room model: ${getRoomModel()} (target ${targetPosts} posts / ~${targetComments} comment trees)`
+    );
 
-    if (!result.text) throw new Error('Gemini returned an empty rewrite.');
-    return res.json(JSON.parse(result.text));
+    let content = await generateRoomJson(INSIGHTS_SYSTEM, userPrompt);
+    let parsed = JSON.parse(content);
+    let posts = Array.isArray(parsed?.room?.posts) ? parsed.room.posts : [];
+    let comments = flattenPostComments(posts);
+    if (comments.length === 0) {
+      comments = expandThinThread(coerceRoomComments(parsed?.room?.comments));
+    }
+
+    // Retry if feed is still a lonely mega-thread / empty
+    if (posts.length < Math.min(5, targetPosts - 1) && comments.length < 6) {
+      console.warn(
+        `Thin feed (${posts.length} posts / ${comments.length} comments) — retrying once`
+      );
+      content = await generateRoomJson(
+        INSIGHTS_SYSTEM,
+        userPrompt +
+          `\n\nPREVIOUS ATTEMPT FAILED: returned ${posts.length} posts. Return exactly ${targetPosts} SEPARATE posts about DIFFERENT episodes/beats.`
+      );
+      const retryParsed = JSON.parse(content);
+      const retryPosts = Array.isArray(retryParsed?.room?.posts) ? retryParsed.room.posts : [];
+      const retryComments = flattenPostComments(retryPosts);
+      if (retryPosts.length > posts.length || retryComments.length > comments.length) {
+        parsed = retryParsed;
+        posts = retryPosts;
+        comments = retryComments.length ? retryComments : expandThinThread(coerceRoomComments(retryParsed?.room?.comments));
+      }
+    }
+
+    if (!parsed.room || (posts.length === 0 && comments.length === 0)) {
+      return res.status(502).json({ error: 'Model response missing the fandom sub feed.' });
+    }
+
+    parsed.room = { ...parsed.room, posts, comments };
+
+    return res.json(
+      normalizeInsightsResult(
+        { ...parsed, isDemoFixture: false },
+        {
+          seriesId: seriesId || 'series-' + Date.now(),
+          title: title || parsed.title || 'Untitled Series',
+          episodeCount: episodes.length,
+          episodes,
+        }
+      )
+    );
   } catch (error: any) {
-    console.error('Rewrite error:', error);
-    res.status(500).json({ error: 'Failed to rewrite script snippet.' });
+    console.error('Insights error:', error?.message || error);
+    return res.status(500).json({
+      error: error?.message || 'Room simulation failed. Check API key and try again.',
+    });
   }
 });
 
-// 3. Audio TTS Preview Endpoint using Gemini TTS
-app.post('/api/tts-preview', async (req, res) => {
+app.post('/api/dropoff-from-csv', async (req, res) => {
   try {
-    const { text, voiceName = 'Kore' } = req.body;
-    if (!text || text.trim().length === 0) {
-      return res.status(400).json({ error: 'Text prompt required for TTS.' });
+    const { rows, beatHint } = req.body as {
+      rows?: Array<{ minute: number; retention: number }>;
+      beatHint?: string;
+    };
+
+    if (!rows || !Array.isArray(rows) || rows.length < 2) {
+      return res.status(400).json({ error: 'CSV rows with minute and retention required.' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(501).json({ error: 'TTS requires GEMINI_API_KEY. Analysis/rewrite work with OPENAI_API_KEY alone.' });
+    let dip = rows[0];
+    for (const row of rows) {
+      if (row.retention < dip.retention) dip = row;
     }
 
-    const ai = getGeminiClient();
-
-    // Clean SFX brackets for speech text
-    const cleanText = text.replace(/\[SFX:[^\]]+\]/g, '').trim();
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-tts-preview',
-      contents: [{ parts: [{ text: `Say with dramatic storytelling flair: ${cleanText.slice(0, 400)}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceName || 'Kore' },
-          },
-        },
+    return res.json({
+      dropOff: {
+        source: 'csv',
+        dipMinute: dip.minute,
+        retentionAtDip: dip.retention,
+        linkedBeat: beatHint || `Around minute ${dip.minute} in your uploaded retention data`,
+        reason:
+          'Lowest point in your uploaded retention CSV — your data, not a platform forecast.',
       },
     });
-
-    const base64Audio =
-      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-    if (base64Audio) {
-      res.json({ audioBase64: base64Audio, mimeType: 'audio/pcm;rate=24000' });
-    } else {
-      res.status(400).json({ error: 'Audio generation produced no output.' });
-    }
   } catch (error: any) {
-    console.error('TTS error:', error);
-    res.status(500).json({ error: 'TTS audio synthesis failed', details: error.message });
+    console.error('CSV dropoff error:', error);
+    return res.status(500).json({ error: 'Failed to parse retention CSV.' });
   }
 });
 
-// Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    openai: Boolean(process.env.OPENAI_API_KEY),
+    model: getRoomModel(),
+    reasoningEffort: getReasoningEffort(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 async function startServer() {
@@ -608,8 +933,9 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Story Intelligence Server listening on http://localhost:${PORT}`);
-    console.log(`AI: OpenAI=${Boolean(process.env.OPENAI_API_KEY) ? 'yes' : 'no'}, Gemini=${Boolean(process.env.GEMINI_API_KEY) ? 'yes' : 'no'}`);
+    console.log(`Studio Insights listening on http://localhost:${PORT}`);
+    console.log(`OpenAI configured: ${Boolean(process.env.OPENAI_API_KEY) ? 'yes' : 'no'}`);
+    console.log(`Room model: ${getRoomModel()} (effort: ${getReasoningEffort()})`);
   });
 }
 

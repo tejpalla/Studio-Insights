@@ -1,15 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-crimson-50: #fef2f2;
-  --color-crimson-100: #fee2e2;
-  --color-crimson-200: #fecaca;
-  --color-crimson-300: #fca5a5;
-  --color-crimson-400: #ff4d4d;
-  --color-crimson-500: #f41b26;
-  --color-crimson-600: #dd003c;
-  --color-crimson-700: #b80710;
-  --color-crimson-800: #8c050c;
-  --color-crimson-900: #4a0306;
-  --color-crimson-950: #260103;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Source Serif 4', Georgia, serif;
+  --color-ink: #1c1917;
+  --color-ink-muted: #57534e;
+  --color-paper: #f7f4ef;
+  --color-paper-2: #efeae2;
+  --color-line: #e7e0d5;
+  --color-accent: #0f766e;
+  --color-accent-soft: #ccfbf1;
+  --color-warn: #b45309;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

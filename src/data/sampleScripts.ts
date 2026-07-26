@@ -1,165 +1,191 @@
 import { StoryScript } from '../types';
 
+/**
+ * Demo series engineered for the 3-minute Insights path:
+ * - Eps 3–5: same kidnap → chase → hospital arc (repetition)
+ * - Ep 4: three new names dumped in one scene (confusion)
+ * - Ep 5 mid-beat: weak / paused conflict (Another cut target)
+ */
+export const DEMO_SERIES: StoryScript = {
+  id: 'demo-harbor-ward',
+  title: 'Harbor Ward',
+  genre: 'Medical thriller / family drama',
+  targetAudience: 'Adult serial audio listeners',
+  synopsis:
+    'Night-shift nurse Mira finds her missing sister’s bracelet in the ER — then the same crisis keeps looping.',
+  episodes: [
+    {
+      id: 'hw-ep1',
+      episodeNumber: 1,
+      title: 'Bracelet in Bay 3',
+      scriptText: `[SFX: Distant siren, fluorescent hum]
+
+NARRATOR:
+Harbor General, 2:14 a.m. Mira Kade has worked nights long enough to stop flinching at blood. She has not stopped looking for her sister, Lena — missing six weeks.
+
+MIRA:
+"Bay 3. Male, mid-thirties, stable. Who brought the bracelet?"
+
+ORDERLY:
+"Found it under the gurney. No patient claim."
+
+[SFX: Soft metal chain on steel tray]
+
+NARRATOR:
+The bracelet is Lena’s. Same scratched charm. Mira’s hands go cold.
+
+MIRA (quiet):
+"Whoever left this… they want me to know she’s still in the city."
+
+[SFX: Curtain rings snap shut]`,
+    },
+    {
+      id: 'hw-ep2',
+      episodeNumber: 2,
+      title: 'The Man Who Won’t Give a Name',
+      scriptText: `[SFX: Heart monitor beep]
+
+NARRATOR:
+The Jane Doe from Bay 3 is gone by morning. In her place: a man with no ID and a bruised jaw who asks for Mira by name.
+
+STRANGER:
+"Lena said you’d come. She said don’t trust the night supervisor."
+
+MIRA:
+"Where is she?"
+
+STRANGER:
+"Warehouse row. Pier 9. But if you go alone—"
+
+[SFX: Footsteps approaching fast]
+
+NIGHT SUPERVISOR (off):
+"Kade. My office. Now."
+
+NARRATOR:
+Mira pockets the bracelet. The stranger’s gurney is empty when she turns back.`,
+    },
+    {
+      id: 'hw-ep3',
+      episodeNumber: 3,
+      title: 'Pier 9 — Again',
+      scriptText: `[SFX: Water lapping against pilings, distant foghorn]
+
+NARRATOR:
+Mira reaches Pier 9. A van door slides. Hands grab her. Hood. Darkness.
+
+MIRA (muffled):
+"Lena—!"
+
+[SFX: Tires screech, chase through alley]
+
+NARRATOR:
+She kicks free near the fish market. Runs. A white sedan cuts her off. Then — hospital lights. Someone dumps her at Harbor’s ambulance bay.
+
+ER DOCTOR:
+"Nurse down. Possible concussion. Get her to Trauma 2!"
+
+[SFX: Stretchers, overlapping shout]
+
+MIRA (dazed):
+"Pier 9… van… they took her again—"
+
+NARRATOR:
+Same loop: taken, chased, returned to the ward. No new answers.`,
+    },
+    {
+      id: 'hw-ep4',
+      episodeNumber: 4,
+      title: 'Three Names, One Room',
+      scriptText: `[SFX: Curtain pull, monitor alarm]
+
+NARRATOR:
+Mira wakes in Trauma 2. Three people she has never heard of stand over her bed talking as if she should already know the plot.
+
+DR. ANIKA RAO:
+"If Calder’s shipment moved through Harbor last month, Mira is the leak."
+
+OFFICER JAY VELASQUEZ:
+"Rafael Soto already flipped. He says Lena was never at Pier 9 — she was at the cold storage on Binder Street."
+
+RAFAEL SOTO:
+"I only drove. Calder paid cash. Anika signed the diversion forms. Jay, you were supposed to bury the bracelet report."
+
+MIRA:
+"Who are you people? What diversion? Who is Calder?"
+
+DR. ANIKA RAO:
+"She’s playing dumb. Jay, get the sister’s file. Rafael — shut up."
+
+[SFX: Chart clipboard slammed on tray]
+
+NARRATOR:
+Three new names. One scene. Mira’s head pounds. The bracelet is gone from her pocket.`,
+    },
+    {
+      id: 'hw-ep5',
+      episodeNumber: 5,
+      title: 'Cold Storage, Same Script',
+      scriptText: `[SFX: Freezer fans, metal door clang]
+
+NARRATOR:
+Binder Street cold storage. Mira finds Lena’s shoe. Then the van again. Hood. Chase. Somehow — Harbor’s ER doors.
+
+ER NURSE:
+"She’s back. Same bruises. Same story."
+
+[SFX: Soft piano from the waiting room TV]
+
+NARRATOR:
+In the corridor, Mira stops. The night supervisor offers coffee. They talk about schedules. About overtime. About nothing that matters while Lena is still missing.
+
+MIRA:
+"I don’t know if I can keep running this loop."
+
+NIGHT SUPERVISOR:
+"Then rest. We’ll file another incident report in the morning."
+
+[SFX: Clock tick, distant code blue]
+
+NARRATOR:
+Conflict pauses. No push. No reveal. The episode floats while the kidnap–chase–hospital pattern waits to repeat.
+
+MIRA (to herself):
+"If I go back to Binder Street tonight… someone has to break the pattern."`,
+    },
+  ],
+};
+
+/** Catalog shown on Home — demo series first; keep one short alternate for upload contrast. */
 export const SAMPLE_SCRIPTS: StoryScript[] = [
+  DEMO_SERIES,
   {
-    id: 'sample-1',
-    title: "The Billionaire's Secret Heir",
-    genre: "Billionaire Romance / Revenge Drama",
-    targetAudience: "Adults 18-35 (Serial Audio Listeners)",
+    id: 'sample-short-clean',
+    title: 'Last Bus to Alwarpet',
+    genre: 'Slice-of-life / romance',
+    targetAudience: 'Young adult',
+    synopsis: 'Two strangers share the last night bus — a clean single-episode sample.',
     episodes: [
       {
-        id: 'ep-1-1',
+        id: 'bus-ep1',
         episodeNumber: 1,
-        title: "The $100 Million Divorce Settlement",
-        scriptText: `[SFX: Thunder rumbling softly, rain hitting a heavy glass penthouse window]
-[SFX: High heels clicking forcefully against marble floors]
-
-NARRATOR (Dramatic, low tone):
-Three years ago, Clara Vance signed a secret marriage contract with Damian Vance—the ruthless billionaire CEO of Vance Global. She gave up her dreams, lived in silence, and endured the humiliation of his cold family. Today, on their wedding anniversary, she holds a signed divorce paper in her hand.
-
-CLARA (Firm, suppressed sorrow):
-"Damian. It's over. I left the signed divorce papers on your desk. Keep your hundred million dollars. I don't want a single cent of Vance money."
-
-DAMIAN (Cold, deep chuckle, paper rustling):
-"Clara, stop acting like a dramatic child. You are a nameless orphan I rescued from the streets. Without me, you are nothing. Where will you go?"
-
-CLARA (Whispering, fierce):
-"Far away from you."
-
-[SFX: Heavy oak door slamming shut]
+        title: 'Seat 14',
+        scriptText: `[SFX: Bus engine idle, rain on windows]
 
 NARRATOR:
-Damian did not chase her. He assumed she would return within forty-eight hours on her knees. He did not know that Clara held a secret that would shatter his entire empire—she was pregnant with twins.
+The last bus to Alwarpet is half empty. Priya takes seat 14. A man with a guitar case takes 15.
 
-[SFX: Car engine roaring in the rain, sudden tire screeching]
+ARJUN:
+"Does this one still stop at the flyover?"
 
-CLARA (Internal Monologue):
-'Four years later... Damian, you thought you destroyed me. But today, my children and I return as the majority shareholders of your biggest rival.'
+PRIYA:
+"Only if the driver feels generous."
 
-[SFX: Dramatic suspense sting / cliffhanger music]`
+[SFX: Soft laugh, bus pulls away]
+
+NARRATOR:
+They talk until the depot. Nothing stolen. Nothing missing. Just rain, and a number written on a ticket stub.`,
       },
-      {
-        id: 'ep-1-2',
-        episodeNumber: 2,
-        title: "The Return of Queen CEO",
-        scriptText: `[SFX: Camera shutters flashing rapidly, chatter of reporters]
-
-NARRATOR:
-At the annual Global Tech Summit in Manhattan, every billionaire was waiting to meet the mysterious new Chairwoman of Starlight Holdings. Damian Vance sat in the front row, confident his company would seal the $5 billion AI acquisition.
-
-HOST (On microphone):
-"Ladies and gentlemen, welcome the Chairwoman and CEO of Starlight Holdings... Ms. Clara Vance!"
-
-[SFX: Gasps across the auditorium, glass breaking as Damian drops his wine glass]
-
-DAMIAN (Stunned, furious whisper):
-"Clara...? No... that's impossible. She died in a car crash four years ago!"
-
-CLARA (Confident, clear voice over microphone):
-"Thank you all for coming. Today, Starlight Holdings announces the full buyout of Vance Global's debt. Effective immediately, Damian Vance is stripped of his voting rights."
-
-[SFX: Heavy heartbeat pounding effect]
-
-NARRATOR:
-Damian stormed the stage, grabbing Clara's wrist in front of three hundred cameras.
-
-DAMIAN (Breathing heavily, eyes burning):
-"Who gave you the power to ruin me? And who are those two children standing beside your bodyguard?"
-
-CLARA (Smirking coldly, leaning close to his ear):
-"They are the heirs you abandoned, Mr. Vance. And this is just the beginning of your nightmare."
-
-[SFX: High tension cliffhanger sting]`
-      }
-    ]
+    ],
   },
-  {
-    id: 'sample-2',
-    title: "Revenge of the Abandoned Bride (Flawed Script)",
-    genre: "Urban Drama / Romance",
-    targetAudience: "Serial Audio Drama Viewers",
-    episodes: [
-      {
-        id: 'ep-2-1',
-        episodeNumber: 1,
-        title: "The Broken Marriage Contract",
-        scriptText: `[SFX: Soft piano playing in background]
-
-NARRATOR:
-Let us introduce our main character. Her name is Eleanor. Eleanor is twenty-four years old and she lives in a small town. She likes reading books and drinking green tea every morning. Three years ago, she moved to the big city to work at a financial firm as an assistant. She met a guy named Mark. Mark was very handsome and drove a nice car. They talked for a long time about their futures and decided to get married.
-
-ELEANOR:
-"Hello Mark. What are you doing today?"
-
-MARK:
-"I am standing here with my mother. She wants us to sign this prenuptial agreement before our wedding tomorrow."
-
-ELEANOR:
-"Why does your mother want me to sign a prenuptial agreement? Is it because my family is poor?"
-
-MARK:
-"Yes Eleanor, my mother says you only want my family's money. Please just sign it so we can eat dinner."
-
-[SFX: Paper sliding]
-
-ELEANOR:
-"Okay Mark, I signed it. Now let's go eat dinner."
-
-NARRATOR:
-So Eleanor signed the paper and went to dinner with Mark. But what Eleanor didn't know was that Mark had secretly sold her family's house yesterday! Also, Eleanor forgot her smartphone in the restaurant. When she went back into the restaurant, she saw Mark talking to another girl named Sophia.
-
-MARK:
-"Sophia, I don't love Eleanor. I only married her for her house."
-
-ELEANOR:
-"Oh no, I am sad. I will leave now."
-
-[SFX: Door opens and closes]`
-      }
-    ]
-  },
-  {
-    id: 'sample-3',
-    title: "Shadow Monarch: System Awakening",
-    genre: "Urban Fantasy / Action System",
-    targetAudience: "Young Adults 16-30 (Action/Fantasy Fans)",
-    episodes: [
-      {
-        id: 'ep-3-1',
-        episodeNumber: 1,
-        title: "The Rank-E Hunter's Sacrifice",
-        scriptText: `[SFX: Dripping water in a dark cavern, eerie wind howling]
-[SFX: Heavy metallic footsteps of giant stone statues]
-
-NARRATOR (Urgent, cinematic tone):
-In a world where dimensional gates opened ten years ago, humans awakened supernatural powers called Hunters. Kai was known as the weakest Hunter in the world—a Rank-E who could barely defeat a single goblin. Today, inside the subterranean Double Dungeon, his raiding party of fifteen hunters was trapped by colossal stone gods.
-
-[SFX: Massive explosion, screaming]
-
-HUNTER LEADER (Panicked):
-"Run! The doors are sealed! The eyes of the King Statue... they are glowing red!"
-
-[SFX: Laser beam blast sizzling through air]
-
-KAI (Gasping for breath, blood dripping on stone):
-"Don't move! The rules of this dungeon... if you bow before the altar, the statues won't attack! Everyone, get on your knees!"
-
-[SFX: Sudden dead silence, heavy panting]
-
-NARRATOR:
-One by one, the surviving hunters fled through the altar exit, leaving Kai pinned to the ground by a stone spear. Blood pooled beneath his chest as the stone King raised its sword to crush him.
-
-KAI (Coughing blood, eyes flashing with anger):
-"If I had one more chance... I would never be weak again!"
-
-[SFX: Digital chime tone reverberating through space]
-
-SYSTEM VOICE (Robotic, synthesized echo):
-"[CONGRATULATIONS. YOU HAVE COMPLETED THE HIDDEN TRIAL OF THE DUAL GOD.]"
-"[PLAYER KAI HAS AWAKENED THE NECROMANCER SYSTEM. RE-INITIALIZING STATS.]"
-
-[SFX: Electrical surging roar, bone-crunching powerup]`
-      }
-    ]
-  }
 ];

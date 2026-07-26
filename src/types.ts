@@ -10,96 +10,196 @@ export interface StoryScript {
   title: string;
   genre: string;
   targetAudience: string;
+  synopsis?: string;
   episodes: StoryEpisode[];
 }
 
-export interface GenreBlendItem {
+export interface StructureCharacter {
   name: string;
-  percentage: number;
+  role: string;
+  firstAppearsEpisode: number;
+  notes?: string;
 }
 
-export interface StoryGenome {
-  primaryGenre: string;
-  genreBlend: GenreBlendItem[];
-  emotionalIntensity: number; // 0-100
-  pacingVelocity: number; // 0-100
-  dialogueDensity: number; // 0-100
-  suspenseIndex: number; // 0-100
-  romanceIndex: number; // 0-100
-  actionScale: number; // 0-100
-  humorRating: number; // 0-100
-  hookStrength: number; // 0-100
-  detectedTropes: string[];
-  archetype: string;
-}
-
-export interface HookAnalysis {
-  score: number; // 0-100
-  hookTimeframe: string; // e.g., "0-45 seconds"
-  verdict: 'Exceptional' | 'Engaging' | 'Moderate' | 'Weak';
-  strengths: string[];
-  weaknesses: string[];
-  suggestedOpeningHook: string;
-}
-
-export interface RetentionSegment {
-  timestamp: string; // e.g. "0:30", "1:15", "2:45"
-  retentionPercent: number; // 0-100
-  riskLevel: 'optimal' | 'low' | 'medium' | 'high';
-  reason: string;
-  suggestedFix: string;
-  sceneExcerpt: string;
-}
-
-export interface EmotionalPoint {
-  timestamp: string;
-  sceneNumber: number;
-  dominantEmotion: string; // e.g., "Tension", "Joy", "Heartbreak", "Suspense", "Betrayal"
-  intensity: number; // 0-100
-  valence: number; // -100 to 100
-  description: string;
-}
-
-export interface StoryIssue {
+export interface StructureScene {
   id: string;
-  type: 'plot_hole' | 'character_inconsistency' | 'repetitive_dialogue' | 'pacing_drop' | 'weak_cliffhanger' | 'continuity_error';
-  severity: 'critical' | 'major' | 'minor';
-  title: string;
-  location: string; // e.g. "Episode 1, Scene 2"
-  description: string;
-  suggestedResolution: string;
-  beforeScriptSnippet: string;
-  afterScriptSnippet: string;
-}
-
-export interface BenchmarkComparison {
-  metricName: string;
-  currentScore: number;
-  platformTop10Avg: number;
-  status: 'above_average' | 'average' | 'needs_improvement';
-}
-
-export interface EpisodeSummaryAnalysis {
   episodeNumber: number;
+  order: number;
   title: string;
-  cliffhangerScore: number;
   summary: string;
-  keyStrengths: string;
-  keyWeaknesses: string;
+  charactersPresent: string[];
 }
 
-export interface AnalysisResult {
-  storyId: string;
-  title: string;
-  overallScore: number; // 0-100
-  commercialViability: 'S Tier' | 'A Tier' | 'B Tier' | 'C Tier';
-  predictedCompletionRate: number; // 0-100
-  executiveSummary: string;
-  genome: StoryGenome;
-  hookAnalysis: HookAnalysis;
-  retentionCurve: RetentionSegment[];
-  emotionalTimeline: EmotionalPoint[];
-  issues: StoryIssue[];
-  benchmark: BenchmarkComparison[];
-  episodesAnalyses: EpisodeSummaryAnalysis[];
+export interface StructureTimelineBeat {
+  episodeNumber: number;
+  label: string;
+  summary: string;
 }
+
+export interface StoryStructure {
+  characters: StructureCharacter[];
+  scenes: StructureScene[];
+  timeline: StructureTimelineBeat[];
+}
+
+export interface StoryDNA {
+  summary: string;
+  pacing: number;
+  suspense: number;
+  romance: number;
+  conflict: number;
+  dialogueDensity: number;
+  emotionalIntensity: number;
+  tropes: string[];
+}
+
+/** How the simulated Reddit room grades the whole story — not a line edit. */
+export type StoryVibe = 'masterpiece' | 'solid' | 'mid' | 'slop';
+
+/** Fandom-sub post kinds (TV/Reddit research: post-ep, theory, character, etc.). */
+export type RedditPostKind =
+  | 'episode_discussion'
+  | 'theory'
+  | 'character'
+  | 'pacing'
+  | 'should_i_continue'
+  | 'reaction';
+
+export interface RedditComment {
+  id: string;
+  username: string;
+  flair?: string;
+  vibe: StoryVibe;
+  upvotes: number;
+  body: string;
+  /** Whole-story talk, not “change line 12”. */
+  talksAbout: string;
+  replies?: Array<{
+    id: string;
+    username: string;
+    body: string;
+    upvotes: number;
+  }>;
+}
+
+/** One post in the fandom sub — not a reply to a single mega-thread. */
+export interface RedditPost {
+  id: string;
+  kind: RedditPostKind;
+  title: string;
+  author: string;
+  flair?: string;
+  upvotes: number;
+  vibe: StoryVibe;
+  /** Short OP text (optional). */
+  body?: string;
+  aboutEpisode?: number;
+  comments: RedditComment[];
+}
+
+/**
+ * Participation + retention + sub vitality for judges.
+ * Anchored on NN/g 90-9-1 + serial drop-off + story-depth scaling.
+ */
+export interface EngagementFunnel {
+  audienceSize: number;
+  lurkersPct: number;
+  occasionalPct: number;
+  heavyPostersPct: number;
+  estimatedViewers: number;
+  estimatedCommenters: number;
+  wouldFinishPct: number;
+  wouldPausePct: number;
+  wouldLeavePct: number;
+  leaveReasons: Array<{ reason: string; episodeHint: string; sharePct: number }>;
+  researchNote: string;
+  /** Extra sub vitality (depth-scaled). */
+  onlineNow?: number;
+  postsPerDay?: number;
+  commentsPerDay?: number;
+  depthScore?: number;
+  fandomMaturity?: 'nascent' | 'growing' | 'established' | 'obsessed';
+  controversyIndex?: number;
+  bingeCommitment?: number;
+}
+
+export interface RedditRoom {
+  subreddit: string;
+  tagline: string;
+  audienceSize: number;
+  roomVibe: StoryVibe;
+  vibeSplit: { masterpiece: number; solid: number; mid: number; slop: number };
+  hotTakes: string[];
+  /** Multi-post fandom feed (primary). */
+  posts: RedditPost[];
+  /** Flattened comments across posts — for heat / legacy panels. */
+  comments: RedditComment[];
+  engagement?: EngagementFunnel;
+  /** Derived: why this room is quiet vs on fire (reply depth + polarization). */
+  discussionHeat?: {
+    level: 'quiet' | 'warm' | 'hot' | 'on_fire';
+    score: number;
+    why: string;
+  };
+}
+
+export interface PersonaRisk {
+  id: string;
+  name: string;
+  profile: string;
+  quitEpisode: number;
+  quitScene: string;
+  reason: string;
+  beatExcerpt: string;
+}
+
+export interface RepetitionInsight {
+  pattern: string;
+  episodeNumbers: number[];
+  whyItHurts: string;
+  examples: string[];
+}
+
+export interface ConfusionInsight {
+  episodeNumber: number;
+  scene: string;
+  reason: string;
+  newCharactersIntroduced: string[];
+  excerpt: string;
+}
+
+export interface CutProposal {
+  episodeNumber: number;
+  beatLabel: string;
+  original: string;
+  fast: string;
+  detailed: string;
+  explanation: string;
+  /** Framed as what the room is arguing about — writer keeps liberty. */
+  threadConsensus?: string;
+}
+
+export interface DropOffInsight {
+  source: 'csv';
+  dipMinute: number;
+  retentionAtDip: number;
+  linkedBeat: string;
+  reason: string;
+}
+
+export interface InsightsResult {
+  seriesId: string;
+  title: string;
+  room: RedditRoom;
+  structure: StoryStructure;
+  dna: StoryDNA;
+  personas: PersonaRisk[];
+  repetition: RepetitionInsight | null;
+  confusion: ConfusionInsight | null;
+  cut: CutProposal | null;
+  dropOff?: DropOffInsight | null;
+  isDemoFixture?: boolean;
+}
+
+export type AppView = 'home' | 'series' | 'insights';
+export type InsightsSection = 'thread' | 'pulse' | 'cut' | 'map';
